@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Expedia Hotels',
+  title: 'PARC Hotels',
   description: 'Find and book hotels worldwide',
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             {/* Logo */}
             <a href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-              <span className="text-white font-bold text-xl tracking-tight">expedia</span>
+              <span className="text-white font-bold text-xl tracking-tight">PARC</span>
             </a>
 
             {/* Nav */}
@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <footer className="bg-gray-900 text-gray-400 mt-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <span className="text-white font-bold text-lg">expedia</span>
+              <span className="text-white font-bold text-lg">PARC</span>
               <p className="text-xs text-gray-500">
                 © {new Date().getFullYear()} Expedia Hotels. All rights reserved.
               </p>
