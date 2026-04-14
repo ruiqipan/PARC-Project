@@ -1,106 +1,108 @@
 'use client';
 
-import { Review, TravelerPersona } from '@/types';
-import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
+import { Review } from '@/types';
+import { RATING_LABELS } from '@/lib/utils';
 
-interface ReviewFeedProps {
-  reviews: Review[];
-}
+const PAGE_SIZE = 20;
 
-const PERSONA_LABELS: Record<TravelerPersona, string> = {
-  business: '💼 Business',
-  family: '👨‍👩‍👧 Family',
-  solo: '🧳 Solo',
-  couple: '💑 Couple',
-  car: '🚗 Road trip',
-  accessibility: '♿ Accessibility',
-};
-
-const PERSONA_COLORS: Record<TravelerPersona, string> = {
-  business: 'bg-blue-100 text-blue-700',
-  family: 'bg-green-100 text-green-700',
-  solo: 'bg-purple-100 text-purple-700',
-  couple: 'bg-pink-100 text-pink-700',
-  car: 'bg-orange-100 text-orange-700',
-  accessibility: 'bg-teal-100 text-teal-700',
-};
-
-function StarBar({ rating }: { rating: number }) {
-  const stars = Math.round(rating);
+function StarBar({ rating, max = 5 }: { rating: number; max?: number }) {
+  const filled = Math.round(rating);
   return (
     <span className="text-yellow-400 text-sm">
-      {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
+      {'★'.repeat(filled)}{'☆'.repeat(max - filled)}
     </span>
   );
 }
 
-export default function ReviewFeed({ reviews }: ReviewFeedProps) {
-  const [filter, setFilter] = useState<TravelerPersona | 'all'>('all');
+function RatingBadge({ value, label }: { value: number; label: string }) {
+  const color =
+    value >= 4 ? 'bg-green-100 text-green-700' :
+    value >= 3 ? 'bg-yellow-100 text-yellow-700' :
+    'bg-red-100 text-red-700';
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${color}`}>
+      {label}: {value}/5
+    </span>
+  );
+}
 
-  const personas = ['all', ...Array.from(new Set(reviews.map(r => r.traveler_persona).filter(Boolean)))] as (TravelerPersona | 'all')[];
+export default function ReviewFeed({ reviews }: { reviews: Review[] }) {
+  const [shown, setShown] = useState(PAGE_SIZE);
 
-  const filtered = filter === 'all' ? reviews : reviews.filter(r => r.traveler_persona === filter);
+  if (reviews.length === 0) {
+    return <p className="text-gray-500 text-sm text-center py-10">No reviews for this property.</p>;
+  }
+
+  const visible = reviews.slice(0, shown);
 
   return (
     <div>
-      {/* Filter chips */}
-      {personas.length > 2 && (
-        <div className="flex gap-2 flex-wrap mb-4">
-          {personas.map(p => (
-            <button
-              key={p}
-              onClick={() => setFilter(p)}
-              className={`text-xs px-3 py-1.5 rounded-full font-medium transition-all ${
-                filter === p
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {p === 'all' ? 'All travelers' : PERSONA_LABELS[p as TravelerPersona]}
-            </button>
-          ))}
-        </div>
-      )}
+      <p className="text-sm text-gray-500 mb-4">
+        Showing {visible.length} of {reviews.length} reviews
+      </p>
 
       <div className="space-y-4">
-        {filtered.slice(0, 10).map(review => (
-          <div key={review.id} className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                {review.review_title && (
-                  <h4 className="font-semibold text-gray-900 text-sm mb-1">{review.review_title}</h4>
-                )}
-                <p className="text-gray-700 text-sm leading-relaxed line-clamp-3">
-                  {review.review_text}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                {review.rating > 0 && <StarBar rating={review.rating} />}
-                {review.acquisition_date && (
-                  <p className="text-xs text-gray-400 mt-1">
-                    {new Date(review.acquisition_date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 mt-3">
-              {review.reviewer_name && (
-                <span className="text-xs text-gray-500">{review.reviewer_name}</span>
-              )}
-              {review.traveler_persona && (
-                <Badge className={`text-xs px-2 py-0.5 ${PERSONA_COLORS[review.traveler_persona as TravelerPersona] || 'bg-gray-100 text-gray-600'}`}>
-                  {PERSONA_LABELS[review.traveler_persona as TravelerPersona] || review.traveler_persona}
-                </Badge>
-              )}
-            </div>
-          </div>
-        ))}
+        {visible.map((review, i) => {
+          const overall = review.rating?.overall ?? 0;
+          const subRatings = Object.entries(review.rating || {})
+            .filter(([key, val]) => key !== 'overall' && typeof val === 'number' && val > 0) as [string, number][];
 
-        {filtered.length === 0 && (
-          <p className="text-gray-500 text-sm text-center py-6">No reviews match this filter.</p>
-        )}
+          return (
+            <div key={`${review.eg_property_id}-${review.acquisition_date}-${i}`}
+              className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  {review.review_title && (
+                    <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">
+                      {review.review_title}
+                    </h4>
+                  )}
+                  {review.review_text && (
+                    <p className="text-gray-700 text-sm leading-relaxed line-clamp-4">
+                      {review.review_text}
+                    </p>
+                  )}
+                </div>
+                <div className="shrink-0 text-right">
+                  {overall > 0 && <StarBar rating={overall} />}
+                  {overall > 0 && (
+                    <p className="text-xs font-semibold text-gray-700 mt-0.5">{overall}/5</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Sub-ratings (non-zero) */}
+              {subRatings.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {subRatings.map(([key, val]) => (
+                    <RatingBadge
+                      key={key}
+                      label={RATING_LABELS[key] || key}
+                      value={val}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {/* Meta */}
+              <div className="flex items-center gap-3 mt-3 text-xs text-gray-400">
+                {review.acquisition_date && <span>{review.acquisition_date}</span>}
+                {review.lob && <span className="capitalize">{review.lob.toLowerCase()}</span>}
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {shown < reviews.length && (
+        <button
+          onClick={() => setShown(s => s + PAGE_SIZE)}
+          className="mt-6 w-full py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          Show more ({reviews.length - shown} remaining)
+        </button>
+      )}
     </div>
   );
 }
