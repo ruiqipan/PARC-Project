@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PARC — Property Awareness & Review Completion
 
-## Getting Started
+**Wharton Hack-AI-thon 2026 · Expedia Group**
 
-First, run the development server:
+PARC detects information gaps in hotel reviews (missing, stale, conflicting) and asks travelers 1–2 targeted follow-up questions the moment they submit a review. Answers are collected via text buttons or voice (Whisper) and stored as structured property insights.
 
+---
+
+## Quick Setup (10 minutes)
+
+### 1. Install dependencies
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configure environment variables
+Copy `.env.local` and fill in your real values:
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+OPENAI_API_KEY=your_openai_api_key
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **Security:** Never commit `.env.local` or put the OpenAI key in client-side code. The key is only used server-side via API routes.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Set up Supabase database
 
-## Learn More
+**Step A — Import the official CSV datasets** (provided by Wharton/Expedia):
+- Go to Supabase Dashboard → Table Editor → Import CSV
+- Import `Description_PROC.csv` as table `hotels`
+- Import `Reviews_PROC.csv` as table `reviews`
+- Make sure `eg_property_id` is used as the join key between both tables
 
-To learn more about Next.js, take a look at the following resources:
+**Step B — Run the schema migrations** (adds rooms, questions, responses, etc.):
+- Go to Supabase Dashboard → SQL Editor
+- Paste and run the contents of `supabase/schema.sql`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Seed rooms and questions
+After the schema is set up:
+```bash
+# In development — just call the seed endpoint
+curl -X POST http://localhost:3000/api/seed
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+This will:
+- Add room types to each hotel
+- Assign traveler personas to existing reviews
+- Run gap detection and pre-generate questions for each hotel
 
-## Deploy on Vercel
+### 5. Run the development server
+```bash
+npm run dev
+```
+Open [http://localhost:3000](http://localhost:3000)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Core User Flow
+
+```
+Hotel List → Hotel Detail → "Write a Review" tab
+  → User writes review text
+  → PARC analyzes: what did they mention + what gaps exist in corpus?
+  → GPT-4o generates 1-2 targeted follow-up questions
+  → User answers via [Good] [Bad] [Not sure] buttons or 🎙️ voice
+  → Answers stored as structured property insights
+  → "You helped X future guests" confirmation
+```
+
+---
+
+## Project Structure
+
+```
+app/
+  page.tsx                    # Hotel listing page
+  hotels/[slug]/
+    page.tsx                  # Server component — fetches data
+    HotelDetailClient.tsx     # Client component — tabs, persona
+  api/
+    questions/route.ts        # POST — generate follow-up questions (GPT-4o)
+    responses/route.ts        # POST — save Good/Bad/Unknown answer
+    feedback/route.ts         # POST — save question upvote/downvote
+    transcribe/route.ts       # POST — Whisper voice transcription
+    seed/route.ts             # POST — seed rooms, personas, questions
+
+components/
+  hotel/HotelCard.tsx         # Grid card on listing page
+  hotel/RoomTypeList.tsx      # Horizontal scroll of room types
+  hotel/ReviewFeed.tsx        # Filterable review list
+  question/ReviewAndQuestion.tsx  # The core PARC widget (write → questions → done)
+  persona/PersonaSelector.tsx # Traveler persona dropdown
+
+lib/
+  supabase.ts                 # Supabase client (lazy init)
+  gap-detector.ts             # Keyword-based gap detection algorithm
+  question-generator.ts       # GPT-4o question generation (with fallback)
+  topic-keywords.ts           # Topic keyword maps
+  seed-data.ts                # Room types and image URLs
+
+supabase/
+  schema.sql                  # Database migrations to run in Supabase
+types/
+  index.ts                    # All TypeScript interfaces
+```
+
+---
+
+## Deployment (Vercel)
+
+```bash
+npm run build   # Verify clean build
+```
+
+Deploy to Vercel:
+1. Push to GitHub
+2. Import project on vercel.com
+3. Add all `.env.local` values as Vercel Environment Variables
+4. Deploy — app is live
+
+> **Important:** Do NOT add `OPENAI_API_KEY` to `NEXT_PUBLIC_*` variables. It must stay server-only.
+
+---
+
+## How the Gap Detection Works
+
+1. **Missing** — topic mentioned in <15% of reviews (benchmark: other hotels ~40%)
+2. **Conflicting** — same topic has ≥25% positive AND negative mentions
+3. **Stale** — topic not mentioned in reviews from last 90 days
+4. **Periodic** — cleanliness always re-validated every ~30 reviews
+
+## How Question Generation Works (3 cases)
+
+**Case A** — Reviewer mentioned a gap topic → ask a deeper follow-up on that specific topic  
+**Case B** — Reviewer expressed negative sentiment → ask what specifically went wrong (structured complaint extraction)  
+**Case C** — No overlap with gap topics → ask about the most critical gap for their persona
+
+Questions are generated by GPT-4o with the review text, property description, and gap analysis as context. Falls back to templates if OpenAI is unavailable.
