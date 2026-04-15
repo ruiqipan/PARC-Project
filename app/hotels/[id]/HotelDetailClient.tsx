@@ -17,6 +17,7 @@ interface Props {
   hotel: Hotel;
   reviews: Review[];
   userId?: string;
+  username?: string;
   userTags?: string[];
 }
 
@@ -58,6 +59,7 @@ export default function HotelDetailClient({
   hotel,
   reviews,
   userId,
+  username,
   userTags = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -265,7 +267,7 @@ export default function HotelDetailClient({
         {/* ── Reviews ── */}
         {activeTab === 'reviews' && (
           <div className="space-y-8">
-            <ReviewInput propertyId={hotel.eg_property_id} userId={userId} />
+            <ReviewInput propertyId={hotel.eg_property_id} userId={userId} username={username} />
             <ReviewFeed reviews={reviews} userTags={userTags} />
           </div>
         )}

@@ -171,4 +171,7 @@ export interface Review {
   rating: RatingBreakdown | null;
   review_title: string | null;
   review_text: string | null;
+  // populated for Review_Submissions entries
+  reviewer_name?: string | null;
+  reviewer_tags?: string[];
 }

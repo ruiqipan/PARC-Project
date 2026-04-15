@@ -12,7 +12,11 @@ async function getHotelData(id: string) {
   try {
     const supabase = createServerClient();
 
-    const [{ data: hotel, error: hotelError }, { data: reviews }] = await Promise.all([
+    const [
+      { data: hotel, error: hotelError },
+      { data: historicReviews },
+      { data: submissions },
+    ] = await Promise.all([
       supabase
         .from('Description_PROC')
         .select('*')
@@ -24,14 +28,47 @@ async function getHotelData(id: string) {
         .eq('eg_property_id', id)
         .order('acquisition_date', { ascending: false })
         .limit(10000),
+      supabase
+        .from('Review_Submissions')
+        .select('*')
+        .eq('eg_property_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1000),
     ]);
 
     if (hotelError || !hotel) return null;
 
-    return {
-      hotel: hotel as Hotel,
-      reviews: (reviews || []) as Review[],
-    };
+    // Fetch persona tags for all submitters in one query
+    const submissionList = (submissions ?? []) as Record<string, unknown>[];
+    const userIds = [...new Set(submissionList.map(s => s.user_id).filter(Boolean))] as string[];
+    let personaMap: Record<string, string[]> = {};
+    if (userIds.length > 0) {
+      const supabase2 = createServerClient();
+      const { data: personas } = await supabase2
+        .from('User_Personas')
+        .select('user_id, tags')
+        .in('user_id', userIds);
+      personaMap = Object.fromEntries(
+        (personas ?? []).map((p: Record<string, unknown>) => [p.user_id as string, p.tags as string[]])
+      );
+    }
+
+    // Map Review_Submissions to the Review shape so ReviewFeed can render them uniformly
+    const mappedSubmissions: Review[] = submissionList.map(s => ({
+      eg_property_id: id,
+      acquisition_date: (s.created_at as string) ?? null,
+      lob: 'user_submitted',
+      rating: s.rating ? { overall: s.rating as number } : null,
+      review_title: null,
+      review_text: ((s.ai_polished_text ?? s.raw_text) as string) ?? null,
+      reviewer_name: (s.username as string) ?? null,
+      reviewer_tags: s.user_id ? (personaMap[s.user_id as string] ?? []) : [],
+    }));
+
+    // Merge: user submissions first, then historic reviews
+    const reviews: Review[] = [...mappedSubmissions, ...((historicReviews ?? []) as Review[])];
+
+    return { hotel: hotel as Hotel, reviews };
   } catch {
     return null;
   }
@@ -61,6 +98,7 @@ export default async function HotelDetailPage({ params }: PageProps) {
       hotel={data.hotel}
       reviews={data.reviews}
       userId={session?.userId}
+      username={session?.username}
       userTags={userTags}
     />
   );

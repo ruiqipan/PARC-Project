@@ -142,18 +142,25 @@ export default function ReviewCard({
             <h4 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug mb-1">
               {review.review_title}
             </h4>
-          ) : (
-            <p className="text-sm text-gray-400 italic mb-1">No title</p>
-          )}
+          ) : review.reviewer_name ? (
+            <h4 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug mb-1">
+              {review.reviewer_name}
+            </h4>
+          ) : null}
 
           {/* Meta: date + lob badge */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
             {review.acquisition_date && (
               <span>{formatDate(review.acquisition_date)}</span>
             )}
-            {review.lob && (
+            {review.lob && review.lob !== 'user_submitted' && (
               <span className="capitalize bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
                 {review.lob.toLowerCase()}
+              </span>
+            )}
+            {review.lob === 'user_submitted' && (
+              <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                ✍ Guest Review
               </span>
             )}
           </div>

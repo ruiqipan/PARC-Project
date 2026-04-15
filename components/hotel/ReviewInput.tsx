@@ -46,6 +46,7 @@ interface ReviewInputProps {
   propertyId: string;
   /** Optional — omit when auth is not yet wired up. */
   userId?: string;
+  username?: string;
   /** Called after a successful save, so parent can refresh the feed. */
   onSubmitSuccess?: () => void;
 }
@@ -53,12 +54,14 @@ interface ReviewInputProps {
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 type PolishState = 'idle' | 'loading' | 'done' | 'error';
 
-export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: ReviewInputProps) {
+export default function ReviewInput({ propertyId, userId, username, onSubmitSuccess }: ReviewInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [text, setText] = useState('');
   const [originalText, setOriginalText] = useState(''); // pre-polish snapshot
   const [isPolished, setIsPolished] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [polishState, setPolishState] = useState<PolishState>('idle');
   const [polishError, setPolishError] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
@@ -185,6 +188,8 @@ export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: Rev
       };
 
       if (userId) payload.user_id = userId;
+      if (username) payload.username = username;
+      if (rating > 0) payload.rating = rating;
 
       const { error } = await supabase.from('Review_Submissions').insert(payload);
 
@@ -195,6 +200,7 @@ export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: Rev
       setOriginalText('');
       setIsPolished(false);
       setPolishState('idle');
+      setRating(0);
       onSubmitSuccess?.();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not save review. Please try again.');
@@ -216,6 +222,31 @@ export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: Rev
       <div>
         <h3 className="text-base font-semibold text-gray-900">Write a Review</h3>
         <p className="text-xs text-gray-400 mt-0.5">Share your experience to help future guests.</p>
+      </div>
+
+      {/* Star Rating */}
+      <div>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Overall Rating</p>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map(star => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setRating(star)}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(0)}
+              aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
+              className="text-2xl leading-none transition-transform hover:scale-110 focus:outline-none"
+            >
+              <span className={(hoverRating || rating) >= star ? 'text-yellow-400' : 'text-gray-200'}>
+                ★
+              </span>
+            </button>
+          ))}
+          {rating > 0 && (
+            <span className="ml-2 text-sm text-gray-500">{rating} / 5</span>
+          )}
+        </div>
       </div>
 
       {/* ── Q&A Carousel ───────────────────────────────────────────────────── */}

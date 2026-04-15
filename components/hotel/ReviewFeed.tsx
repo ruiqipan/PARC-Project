@@ -47,6 +47,7 @@ export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) 
             key={`${review.eg_property_id}-${review.acquisition_date}-${i}`}
             review={review}
             userTags={userTags}
+            reviewerTags={review.reviewer_tags}
           />
         ))}
       </div>
