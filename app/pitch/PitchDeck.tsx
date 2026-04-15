@@ -125,20 +125,16 @@ const DecayChart = () => {
 };
 
 const BACKGROUND_COMMENTS = [
-  // Top-left cluster
-  { text: '"WiFi fast enough for back-to-back video calls."',  tag: 'Business Traveler',  x: '2%',  y: '6%',  delay: 0.2 },
-  { text: '"Surprisingly quiet — slept better than at home."', tag: 'Light Sleeper',       x: '2%',  y: '22%', delay: 0.5 },
-  { text: '"Desk setup was perfect for remote work."',         tag: 'Remote Worker',       x: '2%',  y: '38%', delay: 0.7 },
-  // Top-right cluster
-  { text: '"Dog was welcomed with treats at check-in!"',       tag: 'Pet Owner',           x: '68%', y: '5%',  delay: 0.4 },
-  { text: '"Ramp access was clearly marked and easy."',        tag: 'Wheelchair User',     x: '68%', y: '20%', delay: 0.8 },
-  { text: '"Staff spoke Mandarin — huge relief for us."',      tag: 'International Guest', x: '68%', y: '35%', delay: 0.6 },
-  // Bottom-left cluster
-  { text: '"Check-in at 11pm was completely seamless."',       tag: 'Late Arrival',        x: '2%',  y: '65%', delay: 0.3 },
-  { text: '"Gluten-free breakfast options were plentiful."',   tag: 'Dietary Needs',       x: '2%',  y: '80%', delay: 0.9 },
-  // Bottom-right cluster
-  { text: '"Pool open till 10pm — kids were thrilled."',       tag: 'Family Traveler',     x: '68%', y: '65%', delay: 1.0 },
-  { text: '"Free parking made the road trip stress-free."',    tag: 'Road Tripper',        x: '68%', y: '80%', delay: 0.5 },
+  { text: '"WiFi fast enough for back-to-back video calls."',  tag: 'Business Traveler',  x: '1%',  y: '5%',  delay: 0.2 },
+  { text: '"Desk setup was perfect for remote work."',         tag: 'Remote Worker',       x: '3%',  y: '42%', delay: 0.7 },
+  { text: '"Check-in at 11pm was completely seamless."',       tag: 'Late Arrival',        x: '0%',  y: '72%', delay: 0.3 },
+  { text: '"Gluten-free breakfast options were plentiful."',   tag: 'Dietary Needs',       x: '5%',  y: '86%', delay: 0.9 },
+  { text: '"Surprisingly quiet — slept better than at home."', tag: 'Light Sleeper',       x: '22%', y: '2%',  delay: 0.5 },
+  { text: '"Pool open till 10pm — kids were thrilled."',       tag: 'Family Traveler',     x: '18%', y: '88%', delay: 1.0 },
+  { text: '"Dog was welcomed with treats at check-in!"',       tag: 'Pet Owner',           x: '66%', y: '3%',  delay: 0.4 },
+  { text: '"Ramp access was clearly marked and easy."',        tag: 'Wheelchair User',     x: '72%', y: '22%', delay: 0.8 },
+  { text: '"Staff spoke Mandarin — huge relief for us."',      tag: 'International Guest', x: '70%', y: '58%', delay: 0.6 },
+  { text: '"Free parking made the road trip stress-free."',    tag: 'Road Tripper',        x: '65%', y: '82%', delay: 0.5 },
 ];
 
 // --- Final slide: scroll-in → card clears → floating comments → click Book Now → black + slogan ---
@@ -197,14 +193,14 @@ function FinalSlide() {
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: [0, 0.55, 0.45, 0.55], y: [8, 0, -4, 0] }}
+            animate={{ opacity: [0, 0.82, 0.72, 0.82], y: [8, 0, -5, 0] }}
             transition={{ opacity: { duration: 1.2, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
-            className="absolute max-w-[220px]"
+            className="absolute max-w-[210px]"
             style={{ left: c.x, top: c.y }}
           >
-            <div className="bg-white/8 border border-white/15 backdrop-blur-sm rounded-2xl px-3 py-2">
-              <p className="text-white/70 text-[11px] leading-relaxed italic mb-1.5">{c.text}</p>
-              <span className="text-[9px] px-2 py-0.5 bg-blue-500/25 text-blue-300 rounded-full font-medium">{c.tag}</span>
+            <div className="bg-white/12 border border-white/25 backdrop-blur-sm rounded-2xl px-3.5 py-2.5">
+              <p className="text-white/85 text-[11px] leading-relaxed italic mb-2">{c.text}</p>
+              <span className="text-[9px] px-2 py-0.5 bg-blue-500/35 text-blue-200 rounded-full font-semibold">{c.tag}</span>
             </div>
           </motion.div>
         ))}
@@ -214,7 +210,7 @@ function FinalSlide() {
       <motion.div
         initial={{ filter: 'blur(20px)', opacity: 0 }}
         animate={cardControls}
-        className="relative z-20 w-full max-w-md mx-8"
+        className="relative z-20 w-full max-w-sm mx-auto px-6"
       >
         <div className="bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7">
           <div className="flex items-center justify-between mb-5">
