@@ -3,138 +3,18 @@ import { notFound } from 'next/navigation';
 import HotelDetailClient from './HotelDetailClient';
 import { Hotel, Review, UserPersona } from '@/types';
 import { getSession } from '@/lib/session';
-import { buildReviewsProcReviewKey } from '@/lib/review-enrichment';
-import { deriveReviewerTags, matchPersonaTags } from '@/lib/persona-match';
+import {
+  buildReviewsProcReviewKey,
+  normalizeAllowedAiReviewTags,
+} from '@/lib/review-enrichment';
 import {
   computeHotelClaimSuppression,
   type StoredFollowUpAnswer,
 } from '@/lib/hotel-claim-suppression';
+import { sortReviewsByPersonaAlignment } from '@/lib/review-ranking';
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-function hasMeaningfulReviewContent(review: Review): boolean {
-  return Boolean(review.review_title?.trim() || review.review_text?.trim());
-}
-
-function getReviewDisplayPriority(review: Review): number {
-  const hasTitle = Boolean(review.review_title?.trim());
-  const hasBody = Boolean(review.review_text?.trim());
-
-  if (hasTitle && hasBody) {
-    return 2;
-  }
-
-  if (hasTitle || hasBody) {
-    return 1;
-  }
-
-  // Untitled and bodyless reviews should always sink to the bottom.
-  return 0;
-}
-
-function getReviewTimestamp(review: Review): number {
-  if (!review.acquisition_date) {
-    return 0;
-  }
-
-  const time = new Date(review.acquisition_date).getTime();
-  return Number.isNaN(time) ? 0 : time;
-}
-
-function getReviewSourcePriority(review: Review): number {
-  return review.source_type === 'review_submissions' ? 1 : 0;
-}
-
-function normaliseTag(tag: string): string {
-  return tag.trim().toLowerCase();
-}
-
-function getReviewerTags(review: Review): string[] {
-  return review.reviewer_tags?.length
-    ? review.reviewer_tags
-    : deriveReviewerTags(review);
-}
-
-function getReviewSemanticSimilarityScore(review: Review, userTags: string[]): number {
-  if (userTags.length === 0) {
-    return 0;
-  }
-
-  const reviewerTags = getReviewerTags(review);
-
-  if (reviewerTags.length === 0) {
-    return 0;
-  }
-
-  return matchPersonaTags(userTags, reviewerTags, userTags.length).length;
-}
-
-function getReviewExactTagOverlap(review: Review, userTags: string[]): number {
-  if (userTags.length === 0) {
-    return 0;
-  }
-
-  const reviewerTags = getReviewerTags(review).map(normaliseTag);
-  if (reviewerTags.length === 0) {
-    return 0;
-  }
-
-  const reviewerTagSet = new Set(reviewerTags);
-  return userTags.reduce((count, tag) => (
-    reviewerTagSet.has(normaliseTag(tag)) ? count + 1 : count
-  ), 0);
-}
-
-function sortReviews(reviews: Review[], userTags: string[]): Review[] {
-  const reviewSignals = new Map(
-    reviews.map(review => [
-      review,
-      {
-        hasContent: hasMeaningfulReviewContent(review),
-        displayPriority: getReviewDisplayPriority(review),
-        exactOverlap: getReviewExactTagOverlap(review, userTags),
-        semanticSimilarity: getReviewSemanticSimilarityScore(review, userTags),
-        sourcePriority: getReviewSourcePriority(review),
-        timestamp: getReviewTimestamp(review),
-      },
-    ]),
-  );
-
-  return [...reviews].sort((a, b) => {
-    const aSignals = reviewSignals.get(a);
-    const bSignals = reviewSignals.get(b);
-    if (!aSignals || !bSignals) {
-      return 0;
-    }
-
-    if (aSignals.hasContent !== bSignals.hasContent) {
-      return aSignals.hasContent ? -1 : 1;
-    }
-
-    const exactOverlapDelta = bSignals.exactOverlap - aSignals.exactOverlap;
-    if (exactOverlapDelta !== 0) {
-      return exactOverlapDelta;
-    }
-
-    const similarityDelta = bSignals.semanticSimilarity - aSignals.semanticSimilarity;
-    if (similarityDelta !== 0) {
-      return similarityDelta;
-    }
-
-    const priorityDelta = bSignals.displayPriority - aSignals.displayPriority;
-    if (priorityDelta !== 0) {
-      return priorityDelta;
-    }
-
-    const sourcePriorityDelta = bSignals.sourcePriority - aSignals.sourcePriority;
-    if (sourcePriorityDelta !== 0) {
-      return sourcePriorityDelta;
-    }
-
-    return bSignals.timestamp - aSignals.timestamp;
-  });
 }
 
 async function getHotelData(id: string) {
@@ -187,6 +67,25 @@ async function getHotelData(id: string) {
       );
     }
 
+    const { data: enrichmentRows } = await supabase
+      .from('Review_Enrichments')
+      .select('review_key, generated_title, generated_tags')
+      .eq('eg_property_id', id);
+
+    const enrichmentMap = new Map(
+      ((enrichmentRows ?? []) as Record<string, unknown>[]).map(row => [
+        row.review_key as string,
+        {
+          generated_title: typeof row.generated_title === 'string' ? row.generated_title : null,
+          generated_tags: normalizeAllowedAiReviewTags(
+            Array.isArray(row.generated_tags)
+              ? row.generated_tags.filter((tag): tag is string => typeof tag === 'string')
+              : [],
+          ),
+        },
+      ]),
+    );
+
     // Fetch persona tags for all submitters in one query
     const userIds = [...new Set(submissionList.map(s => s.user_id).filter(Boolean))] as string[];
     let personaMap: Record<string, string[]> = {};
@@ -213,6 +112,8 @@ async function getHotelData(id: string) {
       review_key: (s.id as string) ?? undefined,
       reviewer_name: (s.username as string) ?? null,
       reviewer_tags: s.user_id ? (personaMap[s.user_id as string] ?? []) : [],
+      generated_title: null,
+      generated_tags: [],
     }));
 
     const mappedHistoricReviews: Review[] = historicReviewList.map(row => {
@@ -226,9 +127,14 @@ async function getHotelData(id: string) {
         source_type: 'reviews_proc',
       };
 
+      const reviewKey = buildReviewsProcReviewKey(review);
+      const enrichment = enrichmentMap.get(reviewKey);
+
       return {
         ...review,
-        review_key: buildReviewsProcReviewKey(review),
+        review_key: reviewKey,
+        generated_title: enrichment?.generated_title ?? null,
+        generated_tags: enrichment?.generated_tags ?? [],
       };
     });
 
@@ -265,7 +171,7 @@ export default async function HotelDetailPage({ params }: PageProps) {
     userTags = ((persona as UserPersona | null)?.tags ?? []);
   }
 
-  const sortedReviews = sortReviews(data.reviews, userTags);
+  const sortedReviews = sortReviewsByPersonaAlignment(data.reviews, userTags);
 
   return (
     <HotelDetailClient

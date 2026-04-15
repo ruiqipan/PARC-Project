@@ -5,6 +5,7 @@ import type { Review, ReviewEnrichment } from '@/types';
 import ReviewCard from './ReviewCard';
 import { deriveReviewerTags } from '@/lib/persona-match';
 import { REVIEW_ENRICHMENT_BATCH_SIZE } from '@/lib/review-enrichment-constants';
+import { sortReviewsByPersonaAlignment } from '@/lib/review-ranking';
 
 const PAGE_SIZE = REVIEW_ENRICHMENT_BATCH_SIZE;
 
@@ -21,14 +22,31 @@ interface ReviewFeedProps {
 export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) {
   const [shown, setShown] = useState(PAGE_SIZE);
   const [enrichmentMap, setEnrichmentMap] = useState<Record<string, ReviewEnrichment>>({});
-  const visible = reviews.slice(0, shown);
+  const rankedReviews = sortReviewsByPersonaAlignment(
+    reviews.map(review => {
+      const enrichment = review.review_key ? enrichmentMap[review.review_key] : undefined;
+
+      return {
+        ...review,
+        generated_title: enrichment?.generatedTitle ?? review.generated_title ?? null,
+        generated_tags:
+          review.reviewer_tags?.length
+            ? review.reviewer_tags
+            : enrichment?.generatedTags?.length
+              ? enrichment.generatedTags
+              : review.generated_tags ?? [],
+      } satisfies Review;
+    }),
+    userTags,
+  );
+  const visible = rankedReviews.slice(0, shown);
   const pendingVisibleCount = visible.filter(review => {
     if (!review.review_key || !review.source_type) {
       return false;
     }
 
     const hasStoredTitle = Boolean(review.review_title?.trim());
-    const hasStoredTags = Boolean(review.reviewer_tags?.length);
+    const hasStoredTags = Boolean(review.reviewer_tags?.length || review.generated_tags?.length);
     if (hasStoredTitle && hasStoredTags) {
       return false;
     }
@@ -48,7 +66,7 @@ export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) 
         }
 
         const hasStoredTitle = Boolean(review.review_title?.trim());
-        const hasStoredTags = Boolean(review.reviewer_tags?.length);
+        const hasStoredTags = Boolean(review.reviewer_tags?.length || review.generated_tags?.length);
         return !hasStoredTitle || !hasStoredTags;
       })
       .slice(0, REVIEW_ENRICHMENT_BATCH_SIZE);
@@ -118,7 +136,11 @@ export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) 
 
   const enrichedVisible = visible.map(review => {
     const enrichment = review.review_key ? enrichmentMap[review.review_key] : undefined;
-    const derivedTags = review.reviewer_tags?.length ? review.reviewer_tags : deriveReviewerTags(review);
+    const derivedTags = review.reviewer_tags?.length
+      ? review.reviewer_tags
+      : review.generated_tags?.length
+        ? review.generated_tags
+        : deriveReviewerTags(review);
 
     return {
       ...review,
@@ -132,6 +154,8 @@ export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) 
           ? review.reviewer_tags
           : enrichment?.generatedTags?.length
             ? enrichment.generatedTags
+            : review.generated_tags?.length
+              ? review.generated_tags
             : derivedTags,
     } satisfies Review;
   });
