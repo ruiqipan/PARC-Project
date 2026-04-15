@@ -6,24 +6,29 @@ async function getHotelsWithReviewCounts(): Promise<(Hotel & { reviewCount: numb
   try {
     const supabase = createServerClient();
 
-    const [{ data: hotels, error }, { data: reviewRows }] = await Promise.all([
-      supabase.from('Description_PROC').select('*').order('guestrating_avg_expedia', { ascending: false }),
-      supabase.from('Reviews_PROC').select('eg_property_id'),
-    ]);
+    const { data: hotels, error } = await supabase
+      .from('Description_PROC')
+      .select('*')
+      .order('guestrating_avg_expedia', { ascending: false });
 
     if (error || !hotels) {
       console.error('[page] Failed to fetch hotels:', error);
       return [];
     }
 
-    const counts: Record<string, number> = {};
-    (reviewRows || []).forEach(r => {
-      counts[r.eg_property_id] = (counts[r.eg_property_id] || 0) + 1;
-    });
+    // Fetch exact count per hotel in parallel (head:true fetches no rows, just the count)
+    const countResults = await Promise.all(
+      (hotels as Hotel[]).map(h =>
+        supabase
+          .from('Reviews_PROC')
+          .select('*', { count: 'exact', head: true })
+          .eq('eg_property_id', h.eg_property_id)
+      )
+    );
 
-    return (hotels as Hotel[]).map(h => ({
+    return (hotels as Hotel[]).map((h, i) => ({
       ...h,
-      reviewCount: counts[h.eg_property_id] || 0,
+      reviewCount: countResults[i].count ?? 0,
     }));
   } catch (err) {
     console.error('[page] Error:', err);

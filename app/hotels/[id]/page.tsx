@@ -21,7 +21,8 @@ async function getHotelData(id: string) {
         .from('Reviews_PROC')
         .select('*')
         .eq('eg_property_id', id)
-        .order('acquisition_date', { ascending: false }),
+        .order('acquisition_date', { ascending: false })
+        .limit(10000),
     ]);
 
     if (hotelError || !hotel) return null;
