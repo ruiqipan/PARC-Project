@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useRef, useEffect } from 'react';
+import { motion, useAnimation, useInView } from 'framer-motion';
 import {
   RefreshCw,
   Database,
@@ -123,6 +123,108 @@ const DecayChart = () => {
     </div>
   );
 };
+
+// --- Final slide: blur → clear → black → tagline (starts on scroll-in, plays once) ---
+function FinalSlide() {
+  const ref = useRef<HTMLElement>(null);
+  const isInView = useInView(ref, { once: true, amount: 0.6 });
+  const cardControls = useAnimation();
+  const overlayControls = useAnimation();
+  const textControls = useAnimation();
+
+  useEffect(() => {
+    if (!isInView) return;
+    const run = async () => {
+      // 1. Card blurs into focus
+      await cardControls.start({
+        filter: 'blur(0px)', opacity: 1,
+        transition: { duration: 1.4, ease: 'easeOut' },
+      });
+      // 2. Hold clear for 1.8s
+      await new Promise(r => setTimeout(r, 1800));
+      // 3. Card fades out (no return)
+      cardControls.start({
+        opacity: 0,
+        transition: { duration: 1.2, ease: 'easeIn' },
+      });
+      // 4. Black overlay fades in simultaneously
+      await overlayControls.start({
+        opacity: 1,
+        transition: { duration: 1.4, ease: 'easeIn' },
+      });
+      // 5. Tagline appears
+      await textControls.start({
+        opacity: 1,
+        transition: { duration: 1.2, ease: 'easeOut' },
+      });
+    };
+    run();
+  }, [isInView, cardControls, overlayControls, textControls]);
+
+  return (
+    <section ref={ref} className="min-h-screen w-full snap-start relative overflow-hidden bg-black flex items-center justify-center">
+      {/* Background photo */}
+      <div
+        className="absolute inset-0 z-0 bg-cover bg-center"
+        style={{ backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80')` }}
+      >
+        <div className="absolute inset-0 bg-black/60" />
+      </div>
+
+      {/* Hotel card: starts blurry, sharpens, then fades away */}
+      <motion.div
+        initial={{ filter: 'blur(20px)', opacity: 0 }}
+        animate={cardControls}
+        className="absolute inset-0 z-10 flex items-center justify-center px-8 pointer-events-none"
+      >
+        <div className="w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <div className="text-white font-bold text-lg">Omni Interlocken Hotel</div>
+              <div className="text-white/50 text-sm">Broomfield, Colorado · ★ 4.6</div>
+            </div>
+            <div className="bg-green-500/20 border border-green-400/40 rounded-xl px-3 py-1.5 text-green-400 text-xs font-bold">
+              Verified ✓
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            {[{ label: 'WiFi', score: '4.8' }, { label: 'Noise', score: '4.2' }, { label: 'Check-in', score: '4.9' }].map((attr, i) => (
+              <div key={i} className="bg-white/10 rounded-2xl p-3 text-center">
+                <div className="text-white/50 text-[10px] mb-1">{attr.label}</div>
+                <div className="text-white font-black text-xl">{attr.score}</div>
+                <div className="text-green-400 text-[9px] mt-1 font-mono">● Fresh</div>
+              </div>
+            ))}
+          </div>
+          <div className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-2xl text-base text-center">
+            Book Now
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Black overlay — fades in after card clears */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={overlayControls}
+        className="absolute inset-0 z-20 bg-black"
+      />
+
+      {/* Tagline — appears on pure black */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={textControls}
+        className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-8"
+      >
+        <h1 className="text-5xl md:text-8xl font-bold text-white tracking-tight">
+          Know before you go.
+        </h1>
+        <p className="mt-8 text-white/30 text-xs italic tracking-widest uppercase font-mono">
+          PRISM by PARC Group
+        </p>
+      </motion.div>
+    </section>
+  );
+}
 
 // --- 主应用 ---
 
@@ -1011,85 +1113,7 @@ export default function PitchDeck() {
       </section>
 
       {/* Slide 8: Final — Know before you go */}
-      <section className="min-h-screen w-full snap-start relative overflow-hidden bg-black flex items-center justify-center">
-
-        {/* Layer 1: background photo */}
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-center"
-          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80')` }}
-        >
-          <div className="absolute inset-0 bg-black/60" />
-        </div>
-
-        {/* Layer 2: hotel card — blurry → sharp, then fades out */}
-        <motion.div
-          className="absolute inset-0 z-10 flex items-center justify-center px-8"
-          animate={{ opacity: [0, 1, 1, 0] }}
-          transition={{ duration: 5.5, times: [0, 0.18, 0.6, 0.82], ease: 'easeInOut', delay: 0.3 }}
-        >
-          <motion.div
-            animate={{ filter: ['blur(20px)', 'blur(0px)', 'blur(0px)', 'blur(0px)'] }}
-            transition={{ duration: 5.5, times: [0, 0.18, 0.6, 0.82], ease: 'easeOut', delay: 0.3 }}
-            className="w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7"
-          >
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <div className="text-white font-bold text-lg">Omni Interlocken Hotel</div>
-                <div className="text-white/50 text-sm">Broomfield, Colorado · ★ 4.6</div>
-              </div>
-              <div className="bg-green-500/20 border border-green-400/40 rounded-xl px-3 py-1.5 text-green-400 text-xs font-bold">
-                Verified ✓
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              {[
-                { label: 'WiFi', score: '4.8' },
-                { label: 'Noise', score: '4.2' },
-                { label: 'Check-in', score: '4.9' },
-              ].map((attr, i) => (
-                <div key={i} className="bg-white/10 rounded-2xl p-3 text-center">
-                  <div className="text-white/50 text-[10px] mb-1">{attr.label}</div>
-                  <div className="text-white font-black text-xl">{attr.score}</div>
-                  <div className="text-green-400 text-[9px] mt-1 font-mono">● Fresh</div>
-                </div>
-              ))}
-            </div>
-            <div className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-2xl text-base text-center">
-              Book Now
-            </div>
-          </motion.div>
-        </motion.div>
-
-        {/* Layer 3: black overlay that fades in after card clears */}
-        <motion.div
-          className="absolute inset-0 z-20 bg-black"
-          animate={{ opacity: [0, 0, 0, 1, 1] }}
-          transition={{ duration: 5.5, times: [0, 0.55, 0.68, 0.85, 1], ease: 'easeIn', delay: 0.3 }}
-        />
-
-        {/* Layer 4: final text — appears on pure black */}
-        <motion.div
-          className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-8"
-          animate={{ opacity: [0, 0, 0, 0, 1] }}
-          transition={{ duration: 6.5, times: [0, 0.6, 0.75, 0.85, 1], ease: 'easeOut', delay: 0.3 }}
-        >
-          <motion.h1
-            animate={{ letterSpacing: ['0.02em', '0.06em'] }}
-            transition={{ duration: 2, delay: 5.5, ease: 'easeOut' }}
-            className="text-5xl md:text-8xl font-bold text-white tracking-tight"
-          >
-            Know before you go.
-          </motion.h1>
-          <motion.p
-            animate={{ opacity: [0, 1] }}
-            transition={{ duration: 1.2, delay: 6.2 }}
-            className="mt-8 text-white/30 text-xs italic tracking-widest uppercase font-mono"
-          >
-            PRISM by PARC Group
-          </motion.p>
-        </motion.div>
-
-      </section>
+      <FinalSlide />
 
       {/* Footer */}
       <footer className="py-12 text-center text-slate-400 bg-white border-t border-slate-200 snap-start">
