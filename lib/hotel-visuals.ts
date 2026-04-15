@@ -12,7 +12,7 @@ const VISUALS: Record<string, HotelVisual> = {
     src: '/hotel-scenes/photos/broomfield.png',
     fallbackSrc: '/hotel-scenes/broomfield.svg',
     label: 'Mountain stay',
-    sourceUrl: 'https://www.omnihotels.com/hotels/denver-interlocken/property-details/gallery',
+    sourceUrl: 'https://www.skyscanner.com/hotels/united-states/colorado-hotels/omni-interlocken-hotel/ht-148306513',
   },
   freudenstadt: {
     src: '/hotel-scenes/photos/freudenstadt.png',
