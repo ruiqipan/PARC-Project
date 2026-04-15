@@ -47,6 +47,8 @@ export interface FollowUpEngineResponse {
   questions: FollowUpQuestion[];
   /** Exact prompt sent to the LLM — included for transparency and debugging. */
   llm_prompt: string;
+  /** Human-readable explanation of why the top question was chosen (shown in FollowUpCard). */
+  reason?: string;
 }
 
 // ─── Follow-Up Question Payload (from 4-Layer Recommendation Engine) ─────────
@@ -79,6 +81,8 @@ export interface SemanticSliderQuestion {
    * animates the thumb toward the matching pole.
    */
   nlp_hints: NlpHint[];
+  /** Why this question was selected — shown in FollowUpCard header. */
+  reason?: string;
 }
 
 /** A statement-validation question rendered as a 1–5 Disagree→Agree axis. */
@@ -91,6 +95,8 @@ export interface AgreementQuestion {
    */
   statement: string;
   nlp_hints: NlpHint[];
+  /** Why this question was selected — shown in FollowUpCard header. */
+  reason?: string;
 }
 
 /** A multi-select recognition grid of pre-defined option chips. */
@@ -100,6 +106,8 @@ export interface QuickTagQuestion {
   prompt: string;
   /** Pre-defined options the user can tap — no typing required. */
   options: string[];
+  /** Why this question was selected — shown in FollowUpCard header. */
+  reason?: string;
 }
 
 export type FollowUpQuestion =

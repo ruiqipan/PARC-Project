@@ -1,6 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
 import type { FollowUpAnswer } from '@/types';
+import { updateFreshnessFromAnswer } from '@/lib/follow-up-engine';
 
 function isValidUiType(value: unknown): value is FollowUpAnswer['ui_type'] {
   return value === 'Slider' || value === 'Agreement' || value === 'QuickTag';
@@ -10,15 +11,12 @@ function normaliseQuantitativeValue(uiType: FollowUpAnswer['ui_type'], value: un
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return null;
   }
-
   if (uiType === 'Slider') {
     return Math.max(0, Math.min(1, value));
   }
-
   if (uiType === 'Agreement') {
     return Math.max(1, Math.min(5, Math.round(value)));
   }
-
   return null;
 }
 
@@ -75,6 +73,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const supabase = createServerClient();
+
+    // 1. Save answers.
     const rows = answers.map(answer => ({
       review_id,
       feature_name: answer.feature_name,
@@ -83,9 +83,20 @@ export async function POST(request: NextRequest) {
       qualitative_note: answer.qualitative_note,
     }));
 
-    const { error } = await supabase.from('FollowUp_Answers').insert(rows);
-    if (error) {
-      throw error;
+    const { error: insertError } = await supabase.from('FollowUp_Answers').insert(rows);
+    if (insertError) throw insertError;
+
+    // 2. Look up which property this review belongs to, then update freshness.
+    const { data: reviewRow } = await supabase
+      .from('Review_Submissions')
+      .select('eg_property_id')
+      .eq('id', review_id)
+      .maybeSingle();
+
+    const property_id = (reviewRow as { eg_property_id: string } | null)?.eg_property_id;
+    if (property_id) {
+      const featureNames = answers.map(a => a.feature_name);
+      await updateFreshnessFromAnswer(supabase, property_id, featureNames, new Date());
     }
 
     return Response.json({ ok: true, inserted: rows.length });

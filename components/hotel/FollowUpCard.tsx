@@ -589,11 +589,11 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between border-b border-slate-100 px-6 pt-5 pb-4">
-        <div>
+        <div className="flex-1 min-w-0 pr-3">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-indigo-500">
             Quick follow-up
           </p>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1.5 mb-1.5">
             {questions.map((_, i) => (
               <div
                 key={i}
@@ -605,11 +605,17 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
               />
             ))}
           </div>
+          {/* Reason: why this question was chosen */}
+          {questions[0]?.reason && (
+            <p className="text-[11px] leading-[1.45] text-indigo-600/80 max-w-xs">
+              {questions[0].reason}
+            </p>
+          )}
         </div>
         <button
           onClick={onDismiss}
           disabled={isSubmitting}
-          className="flex size-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           aria-label="Skip follow-up questions"
         >
           <X size={16} />
