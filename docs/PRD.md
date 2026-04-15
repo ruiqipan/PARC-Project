@@ -1,6 +1,6 @@
 # Product Requirements Document (PRD): PARC APP
 
-**Version:** 2.1  
+**Version:** 2.2  
 **Last Updated:** 2026-04-15  
 **Status:** Active Development
 
@@ -27,7 +27,7 @@ PARC APP is a next-generation hotel booking and review platform designed to solv
 - **Onboarding:** First-time visitor lands on `/` → proxy detects no session cookie → redirects to `/login` → user enters username → redirected to `/onboarding` → user selects identity/preference tags (or skips) → persona saved to `User_Personas` → redirected to hotel feed.
 - **Browsing:** User browses hotel list (sorted by guest rating, US-first) → opens hotel detail page → reads reviews with persona similarity badges.
 - **Drafting a Review:** User opens review form on hotel detail page → uses Quick Tags and/or voice input → optionally clicks "AI Polish" to structure the review → submits → review saved to `Review_Submissions`.
-- **Follow-Up (The "Aha" Moment):** After review submission → 4-Layer Engine queries `Description_PROC` and `Reviews_PROC` for gaps → user is presented with 1-2 interactive follow-up questions (slider or agreement axis) → user answers via tap, text, or voice.
+- **Follow-Up (The "Aha" Moment):** After review submission → 4-Layer Engine queries `Description_PROC`, `Reviews_PROC`, and recent `Review_Submissions` for gaps → positive reviews receive 1 verification question, while non-positive reviews receive 2 lightweight questions (problem confirmation + reason isolation) → user answers via tap, text, or voice → answers are written to `FollowUp_Answers` and the review feed refreshes.
 
 ---
 
@@ -65,15 +65,20 @@ PARC APP is a next-generation hotel booking and review platform designed to solv
 ### Feature 4: The 4-Layer Question Recommendation Engine
 **Status: Fully Implemented**
 
-Triggered via `POST /api/reviews/follow-up` after a review is submitted. Returns 1-2 JSON question objects for the follow-up UI.
+Triggered via `POST /api/reviews/follow-up` immediately after a review is submitted. Returns 1-2 JSON question objects for the follow-up UI.
 
-1. **Property Memory Decay Engine (Layer 1):** Scans `Reviews_PROC` for 15 tracked attributes (parking, breakfast, wifi, pet policy, construction, cleanliness, etc.). Flags attributes not mentioned in reviews within their decay window (7 days for cleanliness → 365 days for transit proximity).
+1. **Property Memory Decay Engine (Layer 1):** Scans historical reviews plus recent `Review_Submissions` for 15 tracked attributes (parking, breakfast, wifi, pet policy, construction, cleanliness, etc.). Flags attributes not mentioned within their decay window (7 days for cleanliness → 365 days for transit proximity).
 
-2. **Review Blind Spot Detector (Layer 2):** Reads hotel claims from `Description_PROC` (amenity flags, policy fields). Cross-references against `Reviews_PROC`. If a claimed feature has no recent reviewer confirmation, it becomes a high-priority gap.
+2. **Review Blind Spot Detector (Layer 2):** Reads hotel claims from `Description_PROC` (amenity flags, policy fields). Cross-references against the review corpus. If a claimed feature has no recent reviewer confirmation, it becomes a high-priority gap.
 
 3. **Personalized Persona Matching (Layer 3):** Loads the submitting user's tags from `User_Personas`. Boosts gap priority for attributes relevant to those tags across the 55-tag preset library (e.g., "Pet owner" → pet_policy, "Business traveler" → wifi).
 
-4. **Decision-Risk Minimization (Layer 4):** Merges duplicate gaps, applies deal-breaker weights (safety=10, accessibility=10, late_checkin=8, wifi=7, … breakfast_quality=2). Returns the top 2 gaps. Calls OpenAI `gpt-4o` to generate natural-language questions from the gaps. Falls back to deterministic template questions if LLM fails.
+4. **Decision-Risk Minimization (Layer 4):** Merges duplicate gaps, applies deal-breaker weights (safety=10, accessibility=10, late_checkin=8, wifi=7, … breakfast_quality=2), and selects the most decision-relevant gap for the current review context.
+
+5. **Review-Aware Question Selection:** The final question set is generated deterministically from the ranked gaps plus the submitted review itself:
+  - Positive review → ask exactly 1 high-value verification / refresh question
+  - Non-positive review → ask exactly 2 questions: one to confirm the main pain point, and one to isolate the likely reason
+  - Phrasing is persona-aware and intentionally optimized for “confirm a statement” rather than open-ended writing
 
 ### Feature 5: Low-Friction Follow-Up UI
 **Status: Fully Implemented**
@@ -82,8 +87,9 @@ Converts open-ended questions into "Statements for Confirmation" (Recognition ov
 
 - **Semantic Sliders:** For degree-based questions (e.g., Lighting: Soft ↔ Office White). Returns 0–1 float.
 - **Agreement Axis:** 1-5 Likert scale for statement validation (e.g., "This hotel is very dog friendly: Disagree → Agree").
-- **Quick Tag Grid:** Multi-select chip grid for categorical answers.
+- **Quick Tag Grid:** Multi-select chip grid is supported by the UI component for future categorical follow-ups, though the current production engine emits only Slider and Agreement questions.
 - **Continuous Multi-Modal:** Persistent microphone button on every question state. Voice transcript is mapped to slider/agreement values via NLP keyword matching with intensity modifiers (very/slightly/not negation support).
+- **Persistence:** Submitted follow-up answers are written to `FollowUp_Answers` via a dedicated route handler.
 - Animated slide transitions between questions (Framer Motion). Completion screen on finish.
 
 ---
@@ -97,7 +103,7 @@ Converts open-ended questions into "Statements for Confirmation" (Recognition ov
 | Framework | Next.js 16.2.3 (App Router, React 19) |
 | Styling | Tailwind CSS v4, Framer Motion 12 |
 | Database & Auth | Supabase (PostgreSQL) — username-based session via cookies |
-| LLM | OpenAI `gpt-4o` (review polish + follow-up question generation) |
+| LLM | OpenAI `gpt-4o` (review polish) |
 | Embeddings | OpenAI `text-embedding-3-small` (optional persona matching fallback) |
 | Audio | Web Speech API (browser-native, no API key required) |
 | Deployment | Vercel (Next.js native) |
@@ -130,7 +136,7 @@ review_text      Text
 **`User_Personas`** *(app-managed)*
 ```
 id         UUID  PK
-user_id    UUID  NOT NULL  (stable app session user ID)
+user_id    Text  NOT NULL  (stable app session user ID from cookie session)
 username   Text  NOT NULL  (login handle, unique per user)
 tags       Text[]  (e.g., ['Business traveler', 'Quiet', 'Pet owner'])
 categories Text[]  (parallel array, e.g., ['Travel Style', 'Trip Purpose', 'Priorities & Preferences'])
@@ -141,15 +147,15 @@ UNIQUE (user_id)
 **`Review_Submissions`** *(app-managed)*
 ```
 id               UUID  PK
-eg_property_id   Text  FK → Description_PROC
-user_id          UUID  (nullable — username-session user when available)
+eg_property_id   Text
+user_id          Text  (nullable — username-session user when available)
 raw_text         Text
 ai_polished_text Text
 sentiment_score  Float  (nullable — not yet computed)
 created_at       Timestamp
 ```
 
-**`FollowUp_Answers`** *(app-managed — designed, not yet written to)*
+**`FollowUp_Answers`** *(app-managed — live write path implemented)*
 ```
 id                 UUID  PK
 review_id          UUID  FK → Review_Submissions
@@ -168,6 +174,7 @@ created_at         Timestamp
 |---|---|---|---|
 | `POST` | `/api/ai-polish` | ✅ Live | Takes `rawText`, returns `polishedText` via GPT-4o |
 | `POST` | `/api/reviews/follow-up` | ✅ Live | Runs 4-Layer Engine, returns 1-2 follow-up question objects |
+| `POST` | `/api/reviews/follow-up/answers` | ✅ Live | Persists submitted follow-up answers to `FollowUp_Answers` |
 | `POST` | `/api/session/login` | ✅ Live | Takes `username`, restores or creates a stable user session |
 | `POST` | `/api/session/logout` | ✅ Live | Clears `parc_user_id` and `parc_username` cookies |
 
@@ -182,10 +189,10 @@ created_at         Timestamp
 | Hotel Browsing & Detail | ✅ Complete | 4-tab detail page, all `Description_PROC` fields rendered |
 | Review Feed | ✅ Complete | Paginated 20/page, sub-ratings, date, LOB badge |
 | Review Submission | ✅ Complete | Quick Tags, Q&A carousel, voice input, AI Polish, submit |
-| 4-Layer Follow-Up Engine | ✅ Complete | All 4 layers live, LLM question gen with fallback |
-| Follow-Up UI | ✅ Complete | Slider, Agreement, QuickTag widgets with voice NLP |
+| 4-Layer Follow-Up Engine | ✅ Complete | All 4 layers live, plus deterministic review-aware question selection (positive=1, non-positive=2) |
+| Follow-Up UI | ✅ Complete | Slider and Agreement flows are live end-to-end with voice NLP and post-submit rendering |
 | Proxy / Session | ✅ Complete | Username login, stable user ID cookies, onboarding redirect |
-| FollowUp_Answers persistence | ⚠️ Partial | Table exists, UI collects answers, not yet written to DB |
+| FollowUp_Answers persistence | ✅ Complete | Answers are written through `/api/reviews/follow-up/answers` after the user completes follow-up |
 | Sentiment Scoring | ⚠️ Partial | Column exists in `Review_Submissions`, always NULL |
 | User Authentication | ⚠️ Partial | Username-only session login is live; Supabase Auth is not yet integrated |
 | Review Filtering / Sorting | ❌ Not Started | Reviews displayed in date DESC order only |
@@ -201,5 +208,5 @@ created_at         Timestamp
 | **Phase 2** | Review input with AI Polish, Similarity Badge on review feed | ✅ Done |
 | **Phase 3** | 4-Layer follow-up engine API, persona-aware gap detection | ✅ Done |
 | **Phase 4** | Follow-up UI (sliders/agreement), voice input with NLP, design polish | ✅ Done |
-| **Phase 5** | Persist `FollowUp_Answers`, sentiment scoring, review filtering/sorting | 🔲 Pending |
+| **Phase 5** | Persist `FollowUp_Answers`, sentiment scoring, review filtering/sorting | 🟡 In Progress |
 | **Phase 6** | Supabase Auth (replace anonymous session), hotel search | 🔲 Pending |

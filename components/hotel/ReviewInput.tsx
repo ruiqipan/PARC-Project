@@ -3,7 +3,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
-import type { FollowUpQuestion } from '@/types';
+import FollowUpCard from '@/components/hotel/FollowUpCard';
+import type { FollowUpAnswer, FollowUpEngineResponse, FollowUpQuestion } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,7 @@ interface ReviewInputProps {
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 type PolishState = 'idle' | 'loading' | 'done' | 'error';
+type FollowUpState = 'idle' | 'loading' | 'ready' | 'error';
 
 export default function ReviewInput({ propertyId, userId, username, onSubmitSuccess }: ReviewInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -85,6 +87,10 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
   const [polishError, setPolishError] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [submitError, setSubmitError] = useState('');
+  const [followUpState, setFollowUpState] = useState<FollowUpState>('idle');
+  const [followUpQuestions, setFollowUpQuestions] = useState<FollowUpQuestion[]>([]);
+  const [followUpReviewId, setFollowUpReviewId] = useState<string | null>(null);
+  const [followUpError, setFollowUpError] = useState('');
 
   // Q&A carousel
   const [qaItems, setQaItems] = useState<QAItem[]>(QA_ITEMS);
@@ -212,6 +218,12 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
 
     setSubmitState('submitting');
     setSubmitError('');
+    setFollowUpState('idle');
+    setFollowUpQuestions([]);
+    setFollowUpReviewId(null);
+    setFollowUpError('');
+
+    let reviewSaved = false;
 
     try {
       const supabase = getSupabaseClient();
@@ -227,7 +239,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       if (username) payload.username = username;
       if (rating > 0) payload.rating = rating;
 
-      const { data: inserted, error } = await supabase
+      const { data, error } = await supabase
         .from('Review_Submissions')
         .insert(payload)
         .select('id')
@@ -235,41 +247,111 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
 
       if (error) throw new Error(error.message);
 
+      reviewSaved = true;
       setSubmitState('success');
       setText('');
       setOriginalText('');
       setIsPolished(false);
       setPolishState('idle');
       setRating(0);
-      onSubmitSuccess?.();
 
-      // Refresh Top Q&A with personalized follow-up questions from the recommendation engine
-      if (userId && inserted?.id) {
-        setQaLoading(true);
-        try {
-          const res = await fetch('/api/reviews/follow-up', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ review_id: inserted.id, property_id: propertyId, user_id: userId }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const newItems = mapFollowUpToQAItems(data.questions ?? []);
-            if (newItems.length > 0) {
-              setQaItems(newItems);
-              setCarouselIndex(0);
-            }
-          }
-        } catch {
-          // silently fail — carousel keeps showing default items
-        } finally {
-          setQaLoading(false);
+      const reviewId = typeof data?.id === 'string' ? data.id : null;
+
+      if (!reviewId || !userId) {
+        onSubmitSuccess?.();
+        return;
+      }
+
+      setFollowUpState('loading');
+      setQaLoading(true);
+
+      try {
+        const response = await fetch('/api/reviews/follow-up', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            review_id: reviewId,
+            property_id: propertyId,
+            user_id: userId,
+          }),
+        });
+
+        const followUpData = (await response.json()) as FollowUpEngineResponse | { error?: string };
+
+        if (!response.ok) {
+          throw new Error(
+            'error' in followUpData && typeof followUpData.error === 'string'
+              ? followUpData.error
+              : 'Could not load follow-up questions.',
+          );
         }
+
+        const questions = Array.isArray((followUpData as FollowUpEngineResponse).questions)
+          ? (followUpData as FollowUpEngineResponse).questions
+          : [];
+        const newItems = mapFollowUpToQAItems(questions);
+
+        if (newItems.length > 0) {
+          setQaItems(newItems);
+          setCarouselIndex(0);
+        }
+
+        if (questions.length === 0) {
+          setFollowUpState('idle');
+          onSubmitSuccess?.();
+          return;
+        }
+
+        setFollowUpReviewId(reviewId);
+        setFollowUpQuestions(questions);
+        setFollowUpState('ready');
+      } finally {
+        setQaLoading(false);
       }
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : 'Could not save review. Please try again.');
-      setSubmitState('error');
+      const message = err instanceof Error ? err.message : 'Could not save review. Please try again.';
+
+      if (reviewSaved) {
+        setFollowUpState('error');
+        setFollowUpError(`Your review was saved, but the follow-up questions did not load: ${message}`);
+        onSubmitSuccess?.();
+      } else {
+        setSubmitError(message);
+        setSubmitState('error');
+      }
     }
+  }
+
+  async function handleFollowUpComplete(answers: FollowUpAnswer[]) {
+    if (!followUpReviewId) {
+      throw new Error('Missing submitted review ID for follow-up answers.');
+    }
+
+    const response = await fetch('/api/reviews/follow-up/answers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        review_id: followUpReviewId,
+        answers,
+      }),
+    });
+
+    const payload = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      throw new Error(payload.error ?? 'Could not save your follow-up answers.');
+    }
+
+    window.setTimeout(() => {
+      onSubmitSuccess?.();
+    }, 350);
+  }
+
+  function handleFollowUpDismiss() {
+    setFollowUpState('idle');
+    setFollowUpQuestions([]);
+    setFollowUpReviewId(null);
+    onSubmitSuccess?.();
   }
 
   // ── Carousel nav ─────────────────────────────────────────────────────────
@@ -531,6 +613,31 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
           </>
         )}
       </div>
+
+      {followUpState === 'loading' && (
+        <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 px-4 py-4">
+          <p className="text-sm font-semibold text-indigo-900">One quick follow-up…</p>
+          <p className="mt-1 text-xs leading-5 text-indigo-700">
+            We&apos;re choosing the most useful question to update this hotel&apos;s knowledge base.
+          </p>
+        </div>
+      )}
+
+      {followUpState === 'error' && followUpError && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {followUpError}
+        </div>
+      )}
+
+      {followUpState === 'ready' && followUpQuestions.length > 0 && (
+        <div className="pt-2">
+          <FollowUpCard
+            questions={followUpQuestions}
+            onComplete={handleFollowUpComplete}
+            onDismiss={handleFollowUpDismiss}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Hotel, Review } from '@/types';
 import ReviewFeed from '@/components/hotel/ReviewFeed';
 import ReviewInput from '@/components/hotel/ReviewInput';
@@ -63,6 +64,7 @@ export default function HotelDetailClient({
   userTags = [],
 }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const router = useRouter();
 
   const city = hotel.city || '';
   const regionLine = [hotel.province, hotel.country].filter(Boolean).join(', ');
@@ -267,7 +269,16 @@ export default function HotelDetailClient({
         {/* ── Reviews ── */}
         {activeTab === 'reviews' && (
           <div className="space-y-8">
-            <ReviewInput propertyId={hotel.eg_property_id} userId={userId} username={username} />
+            <ReviewInput
+              propertyId={hotel.eg_property_id}
+              userId={userId}
+              username={username}
+              onSubmitSuccess={() => {
+                startTransition(() => {
+                  router.refresh();
+                });
+              }}
+            />
             <ReviewFeed reviews={reviews} userTags={userTags} />
           </div>
         )}

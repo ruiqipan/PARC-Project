@@ -43,7 +43,7 @@ import type {
 
 interface Props {
   questions: FollowUpQuestion[];
-  onComplete: (answers: FollowUpAnswer[]) => void;
+  onComplete: (answers: FollowUpAnswer[]) => Promise<void> | void;
   onDismiss: () => void;
 }
 
@@ -351,6 +351,8 @@ function blankAnswer(q: FollowUpQuestion): FollowUpAnswer {
 export default function FollowUpCard({ questions, onComplete, onDismiss }: Props) {
   const [step, setStep]     = useState(0);
   const [done, setDone]     = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   // Per-step answer state
   const [answers, setAnswers] = useState<FollowUpAnswer[]>(
@@ -437,12 +439,21 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const advance = () => {
+  const advance = async () => {
     if (step < questions.length - 1) {
       setStep(s => s + 1);
+      setSubmitError('');
     } else {
-      setDone(true);
-      onComplete(answers);
+      setSubmitError('');
+      setIsSubmitting(true);
+      try {
+        await onComplete(answers);
+        setDone(true);
+      } catch (error) {
+        setSubmitError(error instanceof Error ? error.message : 'Unable to save your answer right now.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -503,6 +514,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
         </div>
         <button
           onClick={onDismiss}
+          disabled={isSubmitting}
           className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           aria-label="Skip follow-up questions"
         >
@@ -562,18 +574,26 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
 
       {/* ── Footer: Next / Submit ── */}
       <div className="px-5 pb-5 pt-2">
+        {submitError ? (
+          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            {submitError}
+          </p>
+        ) : null}
+
         <motion.button
           onClick={advance}
-          disabled={!canAdvance}
-          whileTap={canAdvance ? { scale: 0.97 } : {}}
+          disabled={!canAdvance || isSubmitting}
+          whileTap={canAdvance && !isSubmitting ? { scale: 0.97 } : {}}
           className={cn(
             'w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200',
-            canAdvance
+            canAdvance && !isSubmitting
               ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-100'
               : 'bg-gray-100 text-gray-300 cursor-not-allowed',
           )}
         >
-          {step < questions.length - 1 ? (
+          {isSubmitting ? (
+            'Saving…'
+          ) : step < questions.length - 1 ? (
             <>Next <ChevronRight size={15} /></>
           ) : (
             'Submit answer'
@@ -582,6 +602,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
 
         <button
           onClick={onDismiss}
+          disabled={isSubmitting}
           className="w-full mt-2 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
         >
           Skip all follow-ups
