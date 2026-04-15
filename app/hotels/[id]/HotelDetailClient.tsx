@@ -16,6 +16,7 @@ import {
 interface Props {
   hotel: Hotel;
   reviews: Review[];
+  userTags?: string[];
 }
 
 const AMENITY_CATEGORY_KEYS = [
@@ -52,7 +53,7 @@ function ratingColor(r: number) {
 
 type Tab = 'overview' | 'amenities' | 'policies' | 'reviews';
 
-export default function HotelDetailClient({ hotel, reviews }: Props) {
+export default function HotelDetailClient({ hotel, reviews, userTags = [] }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   const city = hotel.city || '';
@@ -259,7 +260,7 @@ export default function HotelDetailClient({ hotel, reviews }: Props) {
         {activeTab === 'reviews' && (
           <div className="space-y-8">
             <ReviewInput propertyId={hotel.eg_property_id} />
-            <ReviewFeed reviews={reviews} />
+            <ReviewFeed reviews={reviews} userTags={userTags} />
           </div>
         )}
       </div>

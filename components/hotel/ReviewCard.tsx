@@ -158,6 +158,20 @@ export default function ReviewCard({
             )}
           </div>
 
+          {/* Reviewer persona tags */}
+          {resolvedReviewerTags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {resolvedReviewerTags.map(tag => (
+                <span
+                  key={tag}
+                  className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Feature 2: Similarity badge — sits right below the meta line */}
           <SimilarityBadge matches={matches} />
         </div>
