@@ -47,14 +47,22 @@ function getReviewSourcePriority(review: Review): number {
   return review.source_type === 'review_submissions' ? 1 : 0;
 }
 
-function getReviewSimilarityScore(review: Review, userTags: string[]): number {
+function normaliseTag(tag: string): string {
+  return tag.trim().toLowerCase();
+}
+
+function getReviewerTags(review: Review): string[] {
+  return review.reviewer_tags?.length
+    ? review.reviewer_tags
+    : deriveReviewerTags(review);
+}
+
+function getReviewSemanticSimilarityScore(review: Review, userTags: string[]): number {
   if (userTags.length === 0) {
     return 0;
   }
 
-  const reviewerTags = review.reviewer_tags?.length
-    ? review.reviewer_tags
-    : deriveReviewerTags(review);
+  const reviewerTags = getReviewerTags(review);
 
   if (reviewerTags.length === 0) {
     return 0;
@@ -63,31 +71,69 @@ function getReviewSimilarityScore(review: Review, userTags: string[]): number {
   return matchPersonaTags(userTags, reviewerTags, userTags.length).length;
 }
 
+function getReviewExactTagOverlap(review: Review, userTags: string[]): number {
+  if (userTags.length === 0) {
+    return 0;
+  }
+
+  const reviewerTags = getReviewerTags(review).map(normaliseTag);
+  if (reviewerTags.length === 0) {
+    return 0;
+  }
+
+  const reviewerTagSet = new Set(reviewerTags);
+  return userTags.reduce((count, tag) => (
+    reviewerTagSet.has(normaliseTag(tag)) ? count + 1 : count
+  ), 0);
+}
+
 function sortReviews(reviews: Review[], userTags: string[]): Review[] {
+  const reviewSignals = new Map(
+    reviews.map(review => [
+      review,
+      {
+        hasContent: hasMeaningfulReviewContent(review),
+        displayPriority: getReviewDisplayPriority(review),
+        exactOverlap: getReviewExactTagOverlap(review, userTags),
+        semanticSimilarity: getReviewSemanticSimilarityScore(review, userTags),
+        sourcePriority: getReviewSourcePriority(review),
+        timestamp: getReviewTimestamp(review),
+      },
+    ]),
+  );
+
   return [...reviews].sort((a, b) => {
-    const sourcePriorityDelta = getReviewSourcePriority(b) - getReviewSourcePriority(a);
-    if (sourcePriorityDelta !== 0) {
-      return sourcePriorityDelta;
+    const aSignals = reviewSignals.get(a);
+    const bSignals = reviewSignals.get(b);
+    if (!aSignals || !bSignals) {
+      return 0;
     }
 
-    const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
-    if (priorityDelta !== 0) {
-      return priorityDelta;
+    if (aSignals.hasContent !== bSignals.hasContent) {
+      return aSignals.hasContent ? -1 : 1;
     }
 
-    const aHasContent = hasMeaningfulReviewContent(a);
-    const bHasContent = hasMeaningfulReviewContent(b);
-    if (aHasContent !== bHasContent) {
-      return aHasContent ? -1 : 1;
+    const exactOverlapDelta = bSignals.exactOverlap - aSignals.exactOverlap;
+    if (exactOverlapDelta !== 0) {
+      return exactOverlapDelta;
     }
 
-    const similarityDelta =
-      getReviewSimilarityScore(b, userTags) - getReviewSimilarityScore(a, userTags);
+    const similarityDelta = bSignals.semanticSimilarity - aSignals.semanticSimilarity;
     if (similarityDelta !== 0) {
       return similarityDelta;
     }
 
-    return getReviewTimestamp(b) - getReviewTimestamp(a);
+    const priorityDelta = bSignals.displayPriority - aSignals.displayPriority;
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    const sourcePriorityDelta = bSignals.sourcePriority - aSignals.sourcePriority;
+    if (sourcePriorityDelta !== 0) {
+      return sourcePriorityDelta;
+    }
+
+    return bSignals.timestamp - aSignals.timestamp;
   });
 }
 
