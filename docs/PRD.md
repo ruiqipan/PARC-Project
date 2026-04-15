@@ -99,7 +99,7 @@ updated_at    Timestamp
 ```
 *One row per user. All persona tags are stored as arrays on a single record and can be updated freely.*
 
-**3. Description_PROC** *(existing — hotel property data, sourced from CSV import)*
+**3. Description_PROC** *(read-only — hotel property data, sourced from CSV import, never modified by the app)*
 ```
 eg_property_id  Text  PK
 city, province, country, star_rating
@@ -107,16 +107,16 @@ property_description, area_description
 popular_amenities_list, property_amenity_*
 check_in_*, check_out_*, pet_policy, ...
 ```
-*No separate Hotels table is maintained. All hotel identity and feature data is read directly from this table.*
+*All hotel identity and feature data is read directly from this table. The app never writes to it.*
 
-**4. Reviews_PROC** *(existing — guest review data, sourced from CSV import)*
+**4. Reviews_PROC** *(read-only — guest review data, sourced from CSV import, never modified by the app)*
 ```
 eg_property_id  Text  FK → Description_PROC
 acquisition_date, lob
 rating          JSONB  (overall + 15 sub-dimension scores)
 review_title, review_text
 ```
-*No separate Reviews table is maintained. The 4-Layer Engine queries this table directly to detect decay and blind spots.*
+*The 4-Layer Engine queries this table directly to detect decay and blind spots. The app never writes to it.*
 
 **5. Review_Submissions** *(app-authored reviews)*
 ```
