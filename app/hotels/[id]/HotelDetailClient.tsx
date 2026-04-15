@@ -134,42 +134,44 @@ export default function HotelDetailClient({
             {regionLine && <p className="mt-3 text-sm sm:text-base text-white/82">{regionLine}</p>}
           </div>
 
-          <div className="mt-5 inline-flex max-w-full self-start rounded-[24px] border border-white/18 bg-white/12 text-white shadow-[0_20px_60px_rgba(7,33,68,0.22)] backdrop-blur-xl">
-            <div className="flex flex-col gap-3 p-3 sm:p-4">
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+          <div className="mt-5 flex max-w-full flex-wrap items-start gap-3 self-start sm:gap-4">
+            {(rating != null && rating > 0) || visual.sourceUrl ? (
+              <div className="flex max-w-full flex-col gap-3">
                 {rating != null && rating > 0 && (
-                  <div className="flex items-center gap-2.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-md">
+                  <div className="flex min-h-[68px] items-center gap-2.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-white backdrop-blur-md">
                     <span className={`${ratingColor(rating)} text-white font-bold text-base px-2.5 py-0.5 rounded-lg`}>
                       {rating.toFixed(1)}
                     </span>
-                    <div>
+                    <div className="flex flex-col justify-center">
                       <p className="font-semibold text-sm leading-tight text-white">{ratingLabel(rating)}</p>
                       <p className="text-white/70 text-xs">{reviews.length.toLocaleString()} reviews</p>
                     </div>
                   </div>
                 )}
-                {starRating != null && (
-                  <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-md">
-                    <p className="text-amber-500 text-base leading-tight tracking-wide">
-                      {'★'.repeat(Math.round(starRating))}
-                      {'☆'.repeat(5 - Math.round(starRating))}
-                    </p>
-                    <p className="text-white/70 text-xs">{starRating}-star hotel</p>
-                  </div>
+                {visual.sourceUrl && (
+                  <a
+                    href={visual.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="max-w-full text-[11px] leading-4 text-white/72 underline decoration-white/35 underline-offset-2 transition hover:text-white"
+                    title={visual.sourceUrl}
+                  >
+                    <span className="break-all">
+                      Photo source: {displaySourceUrl(visual.sourceUrl)}
+                    </span>
+                  </a>
                 )}
               </div>
-              {visual.sourceUrl && (
-                <a
-                  href={visual.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-fit max-w-full rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] leading-4 text-white/78 backdrop-blur-md transition hover:bg-white/16 break-all"
-                  title={visual.sourceUrl}
-                >
-                  Photo source: {displaySourceUrl(visual.sourceUrl)}
-                </a>
-              )}
-            </div>
+            ) : null}
+            {starRating != null && (
+              <div className="flex min-h-[68px] min-w-[150px] flex-col justify-center rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-white backdrop-blur-md">
+                <p className="text-amber-500 text-base leading-tight tracking-wide">
+                  {'★'.repeat(Math.round(starRating))}
+                  {'☆'.repeat(5 - Math.round(starRating))}
+                </p>
+                <p className="mt-1 text-white/70 text-xs">{starRating}-star hotel</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
