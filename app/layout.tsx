@@ -29,6 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 Hotels
               </a>
+              <a
+                href="/onboarding"
+                className="text-white text-sm font-medium px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors"
+              >
+                My Profile
+              </a>
             </nav>
           </div>
         </header>

@@ -1,3 +1,110 @@
+// ─── User_Personas ────────────────────────────────────────────────────────────
+
+export interface UserPersona {
+  id: string;
+  user_id: string;
+  tags: string[];
+  categories: string[];
+  updated_at: string;
+}
+
+// ─── Persona Matching ─────────────────────────────────────────────────────────
+
+/**
+ * A single resolved cluster-match between the viewing user's tag and a
+ * reviewer's inferred tag.  Used to generate the "Shares your focus" /
+ * "Similar preference" badge on each ReviewCard.
+ */
+export interface PersonaMatch {
+  /** Original tag from the viewing user's persona. */
+  userTag: string;
+  /** Original tag inferred from the reviewer's data (lob / rated dimensions). */
+  reviewerTag: string;
+  /** Human-readable cluster label, e.g. "Rest & Quiet", "Business Travel". */
+  clusterLabel: string;
+  /** Internal cluster ID, e.g. "rest", "business". Used to pick badge copy. */
+  clusterId: string;
+}
+
+// ─── Follow-Up Engine Response ────────────────────────────────────────────────
+
+/** Complete payload returned by POST /api/reviews/follow-up. */
+export interface FollowUpEngineResponse {
+  review_id: string;
+  property_id: string;
+  questions: FollowUpQuestion[];
+  /** Exact prompt sent to the LLM — included for transparency and debugging. */
+  llm_prompt: string;
+}
+
+// ─── Follow-Up Question Payload (from 4-Layer Recommendation Engine) ─────────
+
+/**
+ * NLP hint: maps a keyword cluster to a directional nudge on the semantic slider.
+ * e.g. "bright" → right, "soft" → left.
+ */
+export interface NlpHint {
+  /** Words/phrases that trigger this nudge. Matched case-insensitively. */
+  keywords: string[];
+  /** Which pole of the slider this sentiment maps to. */
+  direction: 'left' | 'right';
+}
+
+/** A degree-based question rendered as a continuous slider between two poles. */
+export interface SemanticSliderQuestion {
+  ui_type: 'Slider';
+  /** Machine-readable key stored in FollowUp_Answers.feature_name */
+  feature_name: string;
+  /** Human-readable prompt shown above the slider */
+  prompt: string;
+  /** Left-pole label (e.g. "Soft") */
+  left_label: string;
+  /** Right-pole label (e.g. "Office White") */
+  right_label: string;
+  /**
+   * Keyword clusters used by the NLP bridge to auto-update slider value from
+   * voice input. The hook checks each keyword against the transcript and
+   * animates the thumb toward the matching pole.
+   */
+  nlp_hints: NlpHint[];
+}
+
+/** A statement-validation question rendered as a 1–5 Disagree→Agree axis. */
+export interface AgreementQuestion {
+  ui_type: 'Agreement';
+  feature_name: string;
+  /**
+   * Full statement the user is asked to validate.
+   * e.g. "This hotel is very dog friendly"
+   */
+  statement: string;
+  nlp_hints: NlpHint[];
+}
+
+/** A multi-select recognition grid of pre-defined option chips. */
+export interface QuickTagQuestion {
+  ui_type: 'QuickTag';
+  feature_name: string;
+  prompt: string;
+  /** Pre-defined options the user can tap — no typing required. */
+  options: string[];
+}
+
+export type FollowUpQuestion =
+  | SemanticSliderQuestion
+  | AgreementQuestion
+  | QuickTagQuestion;
+
+/** A single answered question, written to FollowUp_Answers. */
+export interface FollowUpAnswer {
+  feature_name: string;
+  ui_type: FollowUpQuestion['ui_type'];
+  /** Normalised 0–1 value for Slider; 1–5 integer for Agreement; unused for QuickTag. */
+  quantitative_value: number | null;
+  /** Selected chips (QuickTag) or optional voice/text transcription. */
+  qualitative_note: string | null;
+}
+
 // ─── Description_PROC ────────────────────────────────────────────────────────
 
 export interface Hotel {

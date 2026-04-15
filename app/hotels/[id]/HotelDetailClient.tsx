@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Hotel, Review } from '@/types';
 import ReviewFeed from '@/components/hotel/ReviewFeed';
+import ReviewInput from '@/components/hotel/ReviewInput';
 import {
   parseArrayField,
   parseHtmlItems,
@@ -255,7 +256,12 @@ export default function HotelDetailClient({ hotel, reviews }: Props) {
         )}
 
         {/* ── Reviews ── */}
-        {activeTab === 'reviews' && <ReviewFeed reviews={reviews} />}
+        {activeTab === 'reviews' && (
+          <div className="space-y-8">
+            <ReviewInput propertyId={hotel.eg_property_id} />
+            <ReviewFeed reviews={reviews} />
+          </div>
+        )}
       </div>
     </div>
   );
