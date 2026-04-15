@@ -8,7 +8,7 @@ import LogoutButton from '@/components/auth/LogoutButton';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'PARC Hotels',
+  title: 'PRISM',
   description: 'Find and book hotels worldwide',
 };
 
@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 hover:opacity-90 transition-opacity">
-              <span className="text-white font-bold text-xl tracking-tight">PARC</span>
+              <span className="text-white font-bold text-xl tracking-tight">PRISM</span>
             </Link>
 
             {/* Nav */}
@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <footer className="bg-gray-900 text-gray-400 mt-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
             <div className="flex items-start sm:items-center justify-between gap-4">
-              <span className="text-white font-bold text-lg">PARC</span>
+              <span className="text-white font-bold text-lg">PRISM by PARC Group</span>
             </div>
           </div>
         </footer>

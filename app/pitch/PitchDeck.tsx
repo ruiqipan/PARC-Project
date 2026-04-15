@@ -201,7 +201,7 @@ export default function PitchDeck() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed"
           >
-            PARC 的核心由两个相互协作的算法引擎组成：一个负责高效"索取"信息，另一个负责精炼"反哺"知识。
+            PRISM 的核心由两个相互协作的算法引擎组成：一个负责高效“索取”信息，另一个负责精炼“反哺”知识。
           </motion.p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -235,8 +235,8 @@ export default function PitchDeck() {
       <Section className="bg-slate-50">
         <div className="text-center mb-16">
           <motion.div className="text-blue-600 font-extrabold mb-4 uppercase tracking-widest text-lg">引擎 A - 属性角度 (检测层)</motion.div>
-          <Title>信息健康度检测：属性维度的"全能体检"</Title>
-          <Subtitle>系统在天亮扫描属性知识库，识别哪些地方需要"外部信息补给"。</Subtitle>
+          <Title>信息健康度检测：属性维度的“全能体检”</Title>
+          <Subtitle>系统在天亮扫描属性知识库，识别哪些地方需要“外部信息补给”。</Subtitle>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -304,7 +304,7 @@ export default function PitchDeck() {
         <div className="text-center mb-12">
           <motion.div className="text-blue-600 font-extrabold mb-4 uppercase tracking-widest text-lg">Freshness Calculation Architecture</motion.div>
           <Title>信息新鲜度如何被计算？</Title>
-          <Subtitle>PARC 如何判断"哪些信息过时，下一步问什么问题"的底层实现</Subtitle>
+          <Subtitle>PRISM 如何判断“哪些信息过时，下一步问什么问题”的底层实现</Subtitle>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch relative">
@@ -427,7 +427,7 @@ export default function PitchDeck() {
         <div className="text-center mb-16">
           <motion.div className="text-blue-600 font-bold mb-2 uppercase tracking-wide">引擎 A - 用户角度 (匹配层)</motion.div>
           <motion.h2 className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight">智能追问匹配：找到对的人问对的话</motion.h2>
-          <motion.p className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed text-center">在识别到"问题"后，我们需要决定在哪个时刻、向哪个用户抛出 1—2 个问题。</motion.p>
+          <motion.p className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed text-center">在识别到“问题”后，我们需要决定在哪个时刻、向哪个用户抛出 1—2 个问题。</motion.p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
@@ -451,7 +451,7 @@ export default function PitchDeck() {
                   <CheckCircle2 className="text-green-500 w-4 h-4" /> 待填任务：泳池 水温是否为恒温？
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CheckCircle2 className="text-green-500 w-4 h-4" /> 用户 Review 关键词："带小孩玩水"、"洗衣室干净"
+                  <CheckCircle2 className="text-green-500 w-4 h-4" /> 用户 Review 关键词：“带小孩玩水”、“洗衣室干净”
                 </div>
                 <div className="flex items-center gap-2 text-sm font-bold text-blue-600">
                   <ArrowRightLeft className="w-4 h-4" /> 触发追问（只需 1 秒点击）：告诉我们水温如何？
@@ -478,7 +478,7 @@ export default function PitchDeck() {
         <div className="mb-16 text-center">
           <motion.div className="text-blue-400 font-bold mb-2 uppercase tracking-wide">引擎 B - 知识反哺层</motion.div>
           <motion.h2 className="text-4xl md:text-5xl font-bold mb-6 text-white tracking-tight">知识更新引擎：从碎片答案到资产</motion.h2>
-          <motion.p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">当用户完成那 1 秒钟的点击，算法引擎开始执行"反哺"流程，完成知识闭环。</motion.p>
+          <motion.p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">当用户完成那 1 秒钟的点击，算法引擎开始执行“反哺”流程，完成知识闭环。</motion.p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
@@ -531,7 +531,7 @@ export default function PitchDeck() {
 
       {/* Footer */}
       <footer className="py-12 text-center text-slate-400 bg-white border-t border-slate-200 snap-start">
-        <p className="text-sm italic tracking-widest uppercase">PRISM / PARC 2.0: Review Intelligence Platform</p>
+        <p className="text-sm italic tracking-widest uppercase">PRISM by PARC Group</p>
       </footer>
     </div>
   );

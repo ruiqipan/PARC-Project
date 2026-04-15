@@ -282,7 +282,7 @@ export default function PersonaTagger({
                   </div>
                   <h1 className="mt-4 text-3xl font-bold tracking-tight">{username}</h1>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-50/90">
-                    These tags shape which reviews feel most relevant to you and which follow-up questions PARC prioritizes.
+                    These tags shape which reviews feel most relevant to you and which follow-up questions PRISM prioritizes.
                   </p>
                 </div>
 

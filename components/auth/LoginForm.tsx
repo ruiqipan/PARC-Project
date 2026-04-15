@@ -39,7 +39,7 @@ export default function LoginForm() {
     <div className="min-h-screen bg-gradient-to-br from-[#003580] via-[#0057a8] to-[#eaf3ff] px-4 py-16">
       <div className="mx-auto max-w-md rounded-3xl border border-white/50 bg-white/95 p-8 shadow-2xl shadow-blue-950/10 backdrop-blur">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#0071c2]">
-          PARC Session
+          PRISM Session
         </p>
         <h1 className="mt-4 text-3xl font-bold text-gray-900">
           Sign in with a username
