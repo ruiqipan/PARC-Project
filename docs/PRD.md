@@ -63,7 +63,6 @@ Converts open-ended questions into "Statements for Confirmation" (Recognition ov
 - **Semantic Sliders:** For degree-based questions (e.g., Lighting: Soft ↔ Office White).
 - **Agreement Axis:** 1-5 slider for statement validation (e.g., "This hotel is very dog friendly: Disagree → Agree").
 - **Quick Tag List:** Multi-select grids without typing.
-- **3D Wireframe / Heatmap:** Interactive room map to pinpoint dirt or damage.
 - **Continuous Multi-Modal:** Every UI state has a persistent microphone and camera icon. If a user says "the light was too bright", NLP maps the sentiment and auto-slides the semantic slider to the right.
 
 ---
@@ -92,34 +91,37 @@ created_at    Timestamp
 
 **2. User_Personas**
 ```
-id            UUID  PK
-user_id       UUID  FK → Users
-tag_name      String
-category      String  (e.g., 'Health', 'Travel Style')
+id            UUID   PK
+user_id       UUID   FK → Users
+tags          Text[] (array of tag strings, e.g., ['Business traveler', 'Quiet', 'Pet owner'])
+categories    Text[] (parallel array of categories for each tag, e.g., ['Travel Style', 'Preference', 'Health'])
+updated_at    Timestamp
 ```
+*One row per user. All persona tags are stored as arrays on a single record and can be updated freely.*
 
-**3. Hotels**
+**3. Description_PROC** *(existing — hotel property data, sourced from CSV import)*
 ```
-id                   UUID  PK
-name                 Text
-location             Text
-star_rating          Float
-official_description Text
+eg_property_id  Text  PK
+city, province, country, star_rating
+property_description, area_description
+popular_amenities_list, property_amenity_*
+check_in_*, check_out_*, pet_policy, ...
 ```
+*No separate Hotels table is maintained. All hotel identity and feature data is read directly from this table.*
 
-**4. Hotel_Features** *(Property Memory Engine Tracking)*
+**4. Reviews_PROC** *(existing — guest review data, sourced from CSV import)*
 ```
-id               UUID  PK
-hotel_id         UUID  FK → Hotels
-feature_name     String  (e.g., 'WiFi', 'Parking', 'Breakfast')
-last_verified_at Timestamp  → used to calculate decay
-decay_rate       Float/Enum  (Fast | Medium | Slow)
+eg_property_id  Text  FK → Description_PROC
+acquisition_date, lob
+rating          JSONB  (overall + 15 sub-dimension scores)
+review_title, review_text
 ```
+*No separate Reviews table is maintained. The 4-Layer Engine queries this table directly to detect decay and blind spots.*
 
-**5. Reviews**
+**5. Review_Submissions** *(app-authored reviews)*
 ```
 id                UUID  PK
-hotel_id          UUID  FK → Hotels
+eg_property_id    Text  FK → Description_PROC
 user_id           UUID  FK → Users
 raw_text          Text
 ai_polished_text  Text
@@ -130,9 +132,9 @@ created_at        Timestamp
 **6. FollowUp_Answers**
 ```
 id                  UUID  PK
-review_id           UUID  FK → Reviews
+review_id           UUID  FK → Review_Submissions
 feature_name        String  (e.g., 'WiFi')
-ui_type             Enum  ('Slider' | 'Agreement' | 'Heatmap')
+ui_type             Enum  ('Slider' | 'Agreement')
 quantitative_value  Float/Int  (e.g., 4 out of 5)
 qualitative_note    Text  (optional voice/text transcription)
 ```
@@ -145,5 +147,5 @@ qualitative_note    Text  (optional voice/text transcription)
 |---|---|---|
 | **Phase 1** | 0–6 | Scaffold Next.js, set up Supabase schema, build landing page (persona tagging), basic hotel browsing feed |
 | **Phase 2** | 6–12 | Review input component with "AI Polish" text expansion; "Similarity Badge" logic on frontend |
-| **Phase 3** | 12–18 | Core AI backend — API route that takes a submitted review, queries Hotel_Features by decay, matches against user tags, outputs 1-2 JSON question objects |
+| **Phase 3** | 12–18 | Core AI backend — API route that takes a submitted review, queries Description_PROC and Reviews_PROC for decay and blind spots, matches against user tags, outputs 1-2 JSON question objects |
 | **Phase 4** | 18–24 | Dynamic follow-up UI (sliders/agreement axis) rendering from Phase 3 JSON payload; Whisper API voice input; design polish & demo prep |
