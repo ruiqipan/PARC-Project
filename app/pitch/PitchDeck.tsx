@@ -209,12 +209,11 @@ export default function PitchDeck() {
             title="引擎 A: 智能追问算法"
             description="Focus: 如何以最小的用户负担，获取最高价值的缺失信息补丁。"
             icon={MessageSquare}
-            highlight
           >
-            <div className="mt-4 flex flex-wrap gap-2 text-slate-300">
-              <span className="bg-slate-700 text-[10px] px-2 py-1 rounded">衰减检测</span>
-              <span className="bg-slate-700 text-[10px] px-2 py-1 rounded">盲点识别</span>
-              <span className="bg-slate-700 text-[10px] px-2 py-1 rounded">决策匹配</span>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">衰减检测</span>
+              <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">盲点识别</span>
+              <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">决策匹配</span>
             </div>
           </Card>
           <Card
