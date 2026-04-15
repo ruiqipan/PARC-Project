@@ -1,0 +1,1 @@
+export const REVIEW_ENRICHMENT_BATCH_SIZE = 20;

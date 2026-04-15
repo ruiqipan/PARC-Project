@@ -24,7 +24,7 @@ import {
   badgeCopyPrefix,
 } from '@/lib/persona-match';
 import { RATING_LABELS } from '@/lib/utils';
-import { Users } from 'lucide-react';
+import { CircleAlert, Sparkles, Users } from 'lucide-react';
 
 interface TranslationOption {
   value: string;
@@ -66,42 +66,36 @@ function formatDate(raw: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function looksNonEnglish(text: string | null): boolean {
-  if (!text) return false;
+function AiHint({
+  label,
+  message,
+}: {
+  label: string;
+  message: string;
+}) {
+  const [open, setOpen] = useState(false);
 
-  const trimmed = text.trim();
-  if (!trimmed) return false;
-
-  if (/[^\u0000-\u024f\s.,!?;:'"()\-[\]{}%/&]/.test(trimmed)) {
-    return true;
-  }
-
-  if (/[à-ÿÀ-Ÿ]/.test(trimmed)) {
-    return true;
-  }
-
-  const lower = trimmed.toLowerCase();
-  const words = lower.match(/[a-zÀ-ÿ]+/g) ?? [];
-  if (words.length < 4) {
-    return false;
-  }
-
-  const englishSignals = new Set([
-    'the', 'and', 'was', 'were', 'with', 'for', 'this', 'that', 'very', 'staff',
-    'room', 'hotel', 'stay', 'location', 'clean', 'great', 'good', 'bad',
-  ]);
-  const nonEnglishSignals = new Set([
-    'el', 'la', 'los', 'las', 'una', 'muy', 'pero', 'porque', 'gracias',
-    'le', 'les', 'des', 'une', 'avec', 'pour', 'très', 'mais',
-    'der', 'die', 'das', 'und', 'nicht', 'mit', 'zimmer',
-    'il', 'lo', 'gli', 'sono', 'molto', 'con',
-    'de', 'do', 'da', 'não', 'com', 'muito',
-  ]);
-
-  const englishCount = words.filter(word => englishSignals.has(word)).length;
-  const nonEnglishCount = words.filter(word => nonEnglishSignals.has(word)).length;
-
-  return nonEnglishCount >= 2 && nonEnglishCount >= englishCount;
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => setOpen(value => !value)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        className="group inline-flex items-center text-gray-400 transition hover:text-gray-600"
+      >
+        <CircleAlert className="size-3.5" aria-hidden />
+        <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-52 -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-[11px] font-normal leading-4 text-gray-600 shadow-lg group-hover:block group-focus-visible:block sm:block sm:opacity-0 sm:transition-opacity sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100">
+          {message}
+        </span>
+      </button>
+      {open && (
+        <span className="absolute bottom-full left-1/2 z-20 mb-2 w-52 -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-[11px] leading-4 text-gray-600 shadow-lg sm:hidden">
+          {message}
+        </span>
+      )}
+    </span>
+  );
 }
 
 // ─── Similarity Badge ─────────────────────────────────────────────────────────
@@ -168,6 +162,7 @@ export default function ReviewCard({
   reviewerTags,
 }: ReviewCardProps) {
   const [targetLanguage, setTargetLanguage] = useState('English');
+  const [showTranslateBox, setShowTranslateBox] = useState(false);
   const [translationState, setTranslationState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [translatedText, setTranslatedText] = useState('');
   const [translationError, setTranslationError] = useState('');
@@ -179,7 +174,7 @@ export default function ReviewCard({
 
   // Derive reviewer tags once per render (cheap — pure computation)
   const resolvedReviewerTags = useMemo(
-    () => reviewerTags ?? deriveReviewerTags(review),
+    () => reviewerTags ?? review.generated_tags ?? deriveReviewerTags(review),
     [review, reviewerTags],
   );
 
@@ -199,10 +194,10 @@ export default function ReviewCard({
     const unmatched = resolvedReviewerTags.filter(t => !matchedTags.includes(t));
     return [...matchedTags, ...unmatched].slice(0, 3);
   }, [resolvedReviewerTags, matches]);
-  const shouldOfferTranslation = useMemo(
-    () => looksNonEnglish(review.review_text),
-    [review.review_text],
-  );
+  const displayTitle = review.review_title?.trim() || review.generated_title?.trim() || review.reviewer_name?.trim() || null;
+  const showsAiTitle = !review.review_title?.trim() && Boolean(review.generated_title?.trim()) && review.title_was_ai_generated;
+  const showsAiTags = Boolean(review.tags_was_ai_generated && resolvedReviewerTags.length > 0);
+  const displayedReviewText = translatedText || review.review_text;
 
   async function handleTranslate() {
     if (!review.review_text || translationState === 'loading') {
@@ -230,6 +225,7 @@ export default function ReviewCard({
       setDetectedLanguage(data.detectedLanguage ?? '');
       setTranslatedText(data.translatedText ?? '');
       setTranslationState('done');
+      setShowTranslateBox(false);
     } catch (err) {
       setTranslationError(err instanceof Error ? err.message : 'Translation failed. Please try again.');
       setTranslationState('error');
@@ -241,15 +237,22 @@ export default function ReviewCard({
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="flex-1 min-w-0">
-          {review.review_title ? (
-            <h4 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug mb-1">
-              {review.review_title}
-            </h4>
-          ) : review.reviewer_name ? (
-            <h4 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug mb-1">
-              {review.reviewer_name}
-            </h4>
-          ) : null}
+          {displayTitle && (
+            <div className="mb-1 flex items-start gap-2">
+              <h4 className="font-semibold text-gray-900 text-sm sm:text-base leading-snug">
+                {displayTitle}
+              </h4>
+              {showsAiTitle && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+                  <Sparkles className="size-3" aria-hidden />
+                  <AiHint
+                    label="AI summarized title"
+                    message="This title was summarized by AI from the review text."
+                  />
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Meta: date + lob badge */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
@@ -270,7 +273,7 @@ export default function ReviewCard({
 
           {/* Reviewer persona tags — top 3 most relevant to viewing user */}
           {topReviewerTags.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {topReviewerTags.map(tag => (
                 <span
                   key={tag}
@@ -279,6 +282,15 @@ export default function ReviewCard({
                   {tag}
                 </span>
               ))}
+              {showsAiTags && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
+                  <Sparkles className="size-3" aria-hidden />
+                  <AiHint
+                    label="AI summarized tags"
+                    message="These tags were summarized by AI from the review text."
+                  />
+                </span>
+              )}
             </div>
           )}
 
@@ -296,66 +308,80 @@ export default function ReviewCard({
       </div>
 
       {/* ── Review body ────────────────────────────────────────────────────── */}
-      {review.review_text && (
+      {displayedReviewText && (
         <p className="text-gray-700 text-sm leading-relaxed line-clamp-4 mb-3">
-          {review.review_text}
+          {displayedReviewText}
         </p>
       )}
 
-      {review.review_text && shouldOfferTranslation && (
-        <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3.5 py-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                Translation
-              </p>
-              <p className="mt-1 text-xs text-amber-800/80">
-                Translate this review into your preferred language.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <select
-                value={targetLanguage}
-                onChange={e => {
-                  setTargetLanguage(e.target.value);
-                  setTranslationState('idle');
-                  setTranslatedText('');
-                  setTranslationError('');
-                }}
-                className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
-              >
-                {TRANSLATION_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
+      {review.review_text && (
+        <div className="relative mb-3 flex justify-end">
+          <div className="flex items-center gap-3">
+            {translatedText && (
               <button
                 type="button"
-                onClick={handleTranslate}
-                disabled={translationState === 'loading'}
-                className="rounded-lg bg-amber-500 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => {
+                  setTranslatedText('');
+                  setDetectedLanguage('');
+                  setTranslationState('idle');
+                  setTranslationError('');
+                }}
+                className="text-xs font-medium text-[#0071c2] transition hover:text-[#005999]"
               >
-                {translationState === 'loading' ? 'Translating…' : `Translate to ${targetLanguage}`}
+                Show original
               </button>
-            </div>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowTranslateBox(value => !value);
+                setTranslationError('');
+              }}
+              className="text-xs font-medium text-[#0071c2] transition hover:text-[#005999]"
+            >
+              Translate
+            </button>
           </div>
 
-          {translationState === 'done' && translatedText && (
-            <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-3">
-              <p className="text-xs font-medium text-amber-700">
-                {detectedLanguage ? `Detected: ${detectedLanguage}` : 'Translated review'}
+          {showTranslateBox && (
+            <div className="absolute right-0 top-full z-10 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                Translate to
               </p>
-              <p className="mt-1 text-sm leading-relaxed text-gray-700">
-                {translatedText}
-              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <select
+                  value={targetLanguage}
+                  onChange={e => {
+                    setTargetLanguage(e.target.value);
+                    setTranslationState('idle');
+                    setTranslationError('');
+                  }}
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#0071c2]/20"
+                >
+                  {TRANSLATION_OPTIONS.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  disabled={translationState === 'loading'}
+                  className="rounded-lg bg-[#0071c2] px-2.5 py-2 text-xs font-semibold text-white transition hover:bg-[#005999] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {translationState === 'loading' ? '...' : 'Go'}
+                </button>
+              </div>
+              {translationError && (
+                <p className="mt-2 text-[11px] leading-4 text-red-600">{translationError}</p>
+              )}
+              {translatedText && detectedLanguage && (
+                <p className="mt-2 text-[11px] leading-4 text-gray-400">
+                  Detected: {detectedLanguage}
+                </p>
+              )}
             </div>
-          )}
-
-          {translationState === 'error' && (
-            <p className="mt-3 text-sm text-red-600">{translationError}</p>
           )}
         </div>
       )}

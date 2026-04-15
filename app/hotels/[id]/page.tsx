@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import HotelDetailClient from './HotelDetailClient';
 import { Hotel, Review, UserPersona } from '@/types';
 import { getSession } from '@/lib/session';
+import { buildReviewsProcReviewKey } from '@/lib/review-enrichment';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -69,6 +70,7 @@ async function getHotelData(id: string) {
 
     // Fetch persona tags for all submitters in one query
     const submissionList = (submissions ?? []) as Record<string, unknown>[];
+    const historicReviewList = (historicReviews ?? []) as Record<string, unknown>[];
     const userIds = [...new Set(submissionList.map(s => s.user_id).filter(Boolean))] as string[];
     let personaMap: Record<string, string[]> = {};
     if (userIds.length > 0) {
@@ -90,11 +92,30 @@ async function getHotelData(id: string) {
       rating: s.rating ? { overall: s.rating as number } : null,
       review_title: null,
       review_text: ((s.ai_polished_text ?? s.raw_text) as string) ?? null,
+      source_type: 'review_submissions',
+      review_key: (s.id as string) ?? undefined,
       reviewer_name: (s.username as string) ?? null,
       reviewer_tags: s.user_id ? (personaMap[s.user_id as string] ?? []) : [],
     }));
 
-    const reviews: Review[] = [...mappedSubmissions, ...((historicReviews ?? []) as Review[])]
+    const mappedHistoricReviews: Review[] = historicReviewList.map(row => {
+      const review: Review = {
+        eg_property_id: id,
+        acquisition_date: (row.acquisition_date as string) ?? null,
+        lob: (row.lob as string) ?? null,
+        rating: (row.rating as Review['rating']) ?? null,
+        review_title: (row.review_title as string) ?? null,
+        review_text: (row.review_text as string) ?? null,
+        source_type: 'reviews_proc',
+      };
+
+      return {
+        ...review,
+        review_key: buildReviewsProcReviewKey(review),
+      };
+    });
+
+    const reviews: Review[] = [...mappedSubmissions, ...mappedHistoricReviews]
       .sort((a, b) => {
         const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
         if (priorityDelta !== 0) {

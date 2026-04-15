@@ -9,6 +9,17 @@ export interface UserPersona {
   updated_at: string;
 }
 
+export type ReviewSourceType = 'reviews_proc' | 'review_submissions';
+
+export interface ReviewEnrichment {
+  reviewKey: string;
+  generatedTitle: string | null;
+  generatedTags: string[];
+  titleWasAiGenerated: boolean;
+  tagsWereAiGenerated: boolean;
+  sourceTextHash: string;
+}
+
 // ─── Persona Matching ─────────────────────────────────────────────────────────
 
 /**
@@ -171,6 +182,13 @@ export interface Review {
   rating: RatingBreakdown | null;
   review_title: string | null;
   review_text: string | null;
+  source_type?: ReviewSourceType;
+  review_key?: string;
+  generated_title?: string | null;
+  generated_tags?: string[];
+  title_was_ai_generated?: boolean;
+  tags_was_ai_generated?: boolean;
+  source_text_hash?: string;
   // populated for Review_Submissions entries
   reviewer_name?: string | null;
   reviewer_tags?: string[];

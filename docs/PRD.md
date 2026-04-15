@@ -47,6 +47,10 @@ PARC APP is a next-generation hotel booking and review platform designed to solv
 
 - In the hotel review feed, each `ReviewCard` displays a similarity badge beneath the review metadata.
 - Reviewer tags are inferred from `lob` (line of business) and high-scoring rating dimensions in `Reviews_PROC`.
+- Reviews with missing titles or missing stored reviewer tags are enriched from the app-managed `Review_Enrichments` cache (title + up to 3 tags). The source review tables remain unchanged.
+- The hotel review feed renders 20 reviews at a time. `POST /api/reviews/enrich` only requests enrichment for the currently visible slice, not the full dataset at once.
+- AI-generated titles and tags are explicitly labeled in the UI. Generated titles show a sparkles icon plus info hint; generated tags show the same treatment beside the tag chips.
+- The enrichment prompt is intentionally conservative: it avoids over-deduction, prefers empty output over weak guesses, and only emits titles/tags that are supported by the review text.
 - Logic uses static semantic cluster map covering the curated preset library plus review-derived synonyms (zero-latency). Examples:
   - User tag "Quiet" + reviewer high `roomcomfort` score → "Shares your focus: Quiet / Comfort"
   - User tag "Business traveler" + reviewer `lob = "business"` → "Similar traveler type: Business"
@@ -155,6 +159,26 @@ sentiment_score  Float  (nullable — not yet computed)
 created_at       Timestamp
 ```
 
+**`Review_Enrichments`** *(app-managed cache)*
+```
+id               UUID  PK
+source_type      Text  ('reviews_proc' | 'review_submissions')
+review_key       Text  UNIQUE
+eg_property_id   Text
+source_text_hash Text
+generated_title  Text
+generated_tags   Text[]
+title_model      Text
+tags_model       Text
+created_at       Timestamp
+updated_at       Timestamp
+```
+
+Operational notes:
+- Cache entries are keyed by a deterministic `review_key`, deduped before persistence, and re-used whenever the review text hash matches.
+- An enrichment row may intentionally contain an empty title and/or empty tags when the model cannot confidently infer them; this still counts as a completed cache result and prevents endless regeneration.
+- As of 2026-04-15, `Reviews_PROC` has been fully backfilled into `Review_Enrichments` for all unique non-empty review texts.
+
 **`FollowUp_Answers`** *(app-managed — live write path implemented)*
 ```
 id                 UUID  PK
@@ -175,6 +199,7 @@ created_at         Timestamp
 | `POST` | `/api/ai-polish` | ✅ Live | Takes `rawText`, returns `polishedText` via GPT-4o |
 | `POST` | `/api/reviews/follow-up` | ✅ Live | Runs 4-Layer Engine, returns 1-2 follow-up question objects |
 | `POST` | `/api/reviews/follow-up/answers` | ✅ Live | Persists submitted follow-up answers to `FollowUp_Answers` |
+| `POST` | `/api/reviews/enrich` | ✅ Live | Reads or generates cached AI titles/tags for the currently visible review slice |
 | `POST` | `/api/session/login` | ✅ Live | Takes `username`, restores or creates a stable user session |
 | `POST` | `/api/session/logout` | ✅ Live | Clears `parc_user_id` and `parc_username` cookies |
 
@@ -186,8 +211,9 @@ created_at         Timestamp
 |---|---|---|
 | Persona Tagging (Onboarding) | ✅ Complete | 55 curated presets across 6 groups + custom tags, saved to `User_Personas` |
 | Review Similarity Badge | ✅ Complete | Semantic clustering, inferred from `lob` + rating dimensions |
+| Review Enrichment Cache | ✅ Complete | On-read enrichment for visible reviews plus completed `Reviews_PROC` backfill into `Review_Enrichments` |
 | Hotel Browsing & Detail | ✅ Complete | 4-tab detail page, all `Description_PROC` fields rendered |
-| Review Feed | ✅ Complete | Paginated 20/page, sub-ratings, date, LOB badge |
+| Review Feed | ✅ Complete | Paginated 20/page, sub-ratings, date, LOB badge, conservative AI title/tag display |
 | Review Submission | ✅ Complete | Quick Tags, Q&A carousel, voice input, AI Polish, submit |
 | 4-Layer Follow-Up Engine | ✅ Complete | All 4 layers live, plus deterministic review-aware question selection (positive=1, non-positive=2) |
 | Follow-Up UI | ✅ Complete | Slider and Agreement flows are live end-to-end with voice NLP and post-submit rendering |
