@@ -26,10 +26,6 @@ function ratingLabel(r: number) {
   return 'Fair';
 }
 
-function displaySourceUrl(sourceUrl: string) {
-  return sourceUrl.replace(/^https?:\/\//, '');
-}
-
 export default function HotelCard({ hotel }: HotelCardProps) {
   const location = [hotel.city, hotel.province, hotel.country].filter(Boolean).join(', ');
   const cityLine = hotel.city || 'Unknown City';
@@ -46,7 +42,7 @@ export default function HotelCard({ hotel }: HotelCardProps) {
       <article className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all duration-200 h-full flex flex-col overflow-hidden">
 
         {/* Scenic header */}
-        <div className="group/image relative h-28 sm:h-32 overflow-hidden bg-slate-200" title={visual.sourceUrl || undefined}>
+        <div className="group/image relative h-28 sm:h-32 overflow-hidden bg-slate-200">
           <Image
             src={imageSrc}
             alt=""
@@ -62,14 +58,6 @@ export default function HotelCard({ hotel }: HotelCardProps) {
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950/75 via-slate-950/20 to-transparent" />
-          {visual.sourceUrl && (
-            <div className="pointer-events-none absolute left-3 right-16 top-3 translate-y-1 rounded-lg border border-white/15 bg-black/35 px-2.5 py-1.5 opacity-0 backdrop-blur-sm transition-all duration-200 group-hover/image:translate-y-0 group-hover/image:opacity-100">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/65">Image source</p>
-              <p className="mt-1 truncate text-[10px] leading-4 text-white/90">
-                {displaySourceUrl(visual.sourceUrl)}
-              </p>
-            </div>
-          )}
           <div className="absolute inset-x-0 bottom-0 p-4">
             <div className="text-white">
               <p className="font-bold text-lg sm:text-xl leading-tight drop-shadow">{cityLine}</p>

@@ -5,9 +5,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const TRANSLATION_PROMPT = `You are a careful hotel review translator.
 
 Your tasks:
-1. Detect whether the review text is primarily English.
-2. If it is already primarily English, do not translate it.
-3. If it is not primarily English, translate it accurately into the requested target language.
+1. Detect the primary language of the review text.
+2. Translate the review accurately into the requested target language.
+3. Only return the original text unchanged if the review is already written in the requested target language.
 
 Rules:
 - Preserve meaning, tone, and sentiment exactly.
@@ -19,7 +19,7 @@ Use this exact JSON schema:
 {
   "detectedLanguage": "<language name in English>",
   "isEnglish": true | false,
-  "translatedText": "<translated text, or the original text if already English>"
+  "translatedText": "<translated text, or the original text if it is already in the requested target language>"
 }`;
 
 interface TranslationResponse {
