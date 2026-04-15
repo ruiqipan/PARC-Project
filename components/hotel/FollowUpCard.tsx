@@ -8,7 +8,7 @@
  * it steps the user through each question using the correct micro-interaction:
  *
  *   • Slider    → SemanticSlider  (degree axis between two poles)
- *   • Agreement → AgreementAxis   (1–5 Disagree→Agree button bar)
+ *   • Agreement → AgreementAxis   (continuous agree ↔ disagree slider)
  *   • QuickTag  → QuickTagList    (multi-select recognition chip grid)
  *
  * A persistent microphone button is always visible. When the user speaks,
@@ -51,21 +51,22 @@ interface Props {
 
 interface SemanticSliderProps {
   question: SemanticSliderQuestion;
-  value: number; // 0–1
+  value: number | null; // 0–1
   onChange: (v: number) => void;
 }
 
 function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const resolvedValue = value ?? 0.5;
 
   // Spring-animate the fill width so NLP nudges feel physical, not instant.
-  const rawMotion = useMotionValue(value);
+  const rawMotion = useMotionValue(resolvedValue);
   const springX   = useSpring(rawMotion, { stiffness: 220, damping: 26 });
 
   // Keep rawMotion in sync when `value` changes externally (e.g. NLP update).
   useEffect(() => {
-    rawMotion.set(value);
-  }, [value, rawMotion]);
+    rawMotion.set(resolvedValue);
+  }, [resolvedValue, rawMotion]);
 
   const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!trackRef.current) return;
@@ -75,19 +76,23 @@ function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowLeft')  onChange(Math.max(0, value - 0.05));
-    if (e.key === 'ArrowRight') onChange(Math.min(1, value + 0.05));
+    if (e.key === 'ArrowLeft')  onChange(Math.max(0, resolvedValue - 0.05));
+    if (e.key === 'ArrowRight') onChange(Math.min(1, resolvedValue + 0.05));
   };
 
   // Interpolated thumb colour: indigo at left, violet at right
-  const pct = Math.round(value * 100);
+  const pct = Math.round(resolvedValue * 100);
 
   return (
-    <div className="space-y-5">
-      <p className="text-sm font-medium text-gray-700 leading-relaxed">{question.prompt}</p>
+    <div className="space-y-8">
+      <div className="rounded-[30px] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 px-7 py-9 shadow-sm">
+        <p className="mx-auto max-w-xl text-center text-2xl font-semibold leading-9 text-slate-900 sm:text-[30px] sm:leading-[42px]">
+          {question.prompt}
+        </p>
+      </div>
 
       {/* Pole labels */}
-      <div className="flex justify-between text-xs font-semibold text-gray-500 px-1 select-none">
+      <div className="flex justify-between px-1 text-sm font-semibold text-slate-500 select-none">
         <span>{question.left_label}</span>
         <span>{question.right_label}</span>
       </div>
@@ -103,18 +108,18 @@ function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onClick={handleTrackClick}
-        className="relative h-3 rounded-full bg-gray-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        className="relative h-5 cursor-pointer rounded-full bg-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       >
         {/* Filled portion */}
         <motion.div
-          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
-          style={{ width: springX.get() === value ? `${pct}%` : undefined }}
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500"
+          style={{ width: springX.get() === resolvedValue ? `${pct}%` : undefined }}
           animate={{ width: `${pct}%` }}
           transition={{ type: 'spring', stiffness: 220, damping: 26 }}
         />
         {/* Thumb */}
         <motion.div
-          className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white border-2 border-indigo-500 shadow-md cursor-grab active:cursor-grabbing"
+          className="absolute top-1/2 size-7 -translate-y-1/2 cursor-grab rounded-full border-[3px] border-indigo-500 bg-white shadow-lg shadow-indigo-200 active:cursor-grabbing"
           style={{ left: `calc(${pct}% - 10px)` }}
           animate={{ left: `calc(${pct}% - 10px)` }}
           transition={{ type: 'spring', stiffness: 220, damping: 26 }}
@@ -123,9 +128,12 @@ function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
       </div>
 
       {/* Current value readout */}
-      <p className="text-center text-xs text-gray-400 tabular-nums select-none">
-        {pct}% toward <span className="font-medium text-gray-600">{pct >= 50 ? question.right_label : question.left_label}</span>
-      </p>
+      <div className="rounded-full bg-slate-50 px-4 py-3 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Selected</p>
+        <p className="mt-1 text-sm font-semibold text-slate-700">
+          {value === null ? 'Slide to respond' : pct >= 50 ? question.right_label : question.left_label}
+        </p>
+      </div>
     </div>
   );
 }
@@ -138,58 +146,72 @@ interface AgreementAxisProps {
   onChange: (v: number) => void;
 }
 
-const AGREEMENT_LABELS: Record<number, { short: string; color: string; bg: string; ring: string }> = {
-  1: { short: 'Strongly\nDisagree', color: 'text-red-600',    bg: 'bg-red-50',    ring: 'ring-red-400'    },
-  2: { short: 'Disagree',          color: 'text-orange-500',  bg: 'bg-orange-50', ring: 'ring-orange-400' },
-  3: { short: 'Neutral',           color: 'text-gray-500',    bg: 'bg-gray-100',  ring: 'ring-gray-400'   },
-  4: { short: 'Agree',             color: 'text-emerald-600', bg: 'bg-emerald-50',ring: 'ring-emerald-400'},
-  5: { short: 'Strongly\nAgree',   color: 'text-green-600',   bg: 'bg-green-50',  ring: 'ring-green-500'  },
+const AGREEMENT_LABELS: Record<number, { short: string; tone: string }> = {
+  1: { short: 'Doesn’t match', tone: 'text-rose-600' },
+  2: { short: 'Leans no', tone: 'text-orange-500' },
+  3: { short: 'In between', tone: 'text-slate-500' },
+  4: { short: 'Leans yes', tone: 'text-emerald-600' },
+  5: { short: 'Matches well', tone: 'text-green-600' },
 };
 
 function AgreementAxis({ question, value, onChange }: AgreementAxisProps) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const resolvedValue = value ?? 3;
+  const ratio = (resolvedValue - 1) / 4;
+  const selectedMeta = value === null ? null : AGREEMENT_LABELS[resolvedValue];
+
+  const handleTrackClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    onChange(Math.max(1, Math.min(5, Math.round(pct * 4) + 1)));
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'ArrowLeft') onChange(Math.max(1, resolvedValue - 1));
+    if (event.key === 'ArrowRight') onChange(Math.min(5, resolvedValue + 1));
+  };
+
   return (
-    <div className="space-y-5">
-      {/* Statement */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3">
-        <p className="text-sm font-medium text-indigo-900 leading-relaxed text-center">
+    <div className="space-y-8">
+      <div className="rounded-[30px] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 px-7 py-9 shadow-sm">
+        <p className="mx-auto max-w-xl text-center text-2xl font-semibold leading-9 text-slate-900 sm:text-[30px] sm:leading-[42px]">
           &ldquo;{question.statement}&rdquo;
         </p>
       </div>
 
-      {/* 1–5 Button bar */}
-      <div className="flex gap-2">
-        {[1, 2, 3, 4, 5].map(n => {
-          const meta    = AGREEMENT_LABELS[n];
-          const selected = value === n;
-          return (
-            <motion.button
-              key={n}
-              onClick={() => onChange(n)}
-              whileTap={{ scale: 0.92 }}
-              animate={selected ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-              transition={{ duration: 0.25 }}
-              className={cn(
-                'flex-1 flex flex-col items-center gap-1.5 rounded-xl py-3 px-1',
-                'border-2 text-xs font-semibold transition-all duration-150',
-                'focus:outline-none focus-visible:ring-2',
-                selected
-                  ? `${meta.bg} border-current ${meta.color} ${meta.ring} ring-2`
-                  : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600',
-              )}
-              aria-label={`${n} — ${meta.short.replace('\n', ' ')}`}
-              aria-pressed={selected}
-            >
-              <span className="text-base font-bold leading-none">{n}</span>
-              <span className="leading-tight text-center whitespace-pre-line">{meta.short}</span>
-            </motion.button>
-          );
-        })}
+      <div className="space-y-4">
+        <div
+          ref={trackRef}
+          role="slider"
+          aria-valuemin={1}
+          aria-valuemax={5}
+          aria-valuenow={resolvedValue}
+          aria-label={question.statement}
+          tabIndex={0}
+          onKeyDown={handleKeyDown}
+          onClick={handleTrackClick}
+          className="relative h-5 cursor-pointer rounded-full bg-gradient-to-r from-rose-200 via-slate-200 to-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        >
+          <motion.div
+            className="absolute top-1/2 size-7 -translate-y-1/2 rounded-full border-[3px] border-indigo-500 bg-white shadow-lg shadow-indigo-200"
+            style={{ left: `calc(${ratio * 100}% - 12px)` }}
+            animate={{ left: `calc(${ratio * 100}% - 12px)` }}
+            transition={{ type: 'spring', stiffness: 220, damping: 26 }}
+          />
+        </div>
+
+        <div className="flex justify-between text-sm font-semibold text-slate-500">
+          <span>Not really</span>
+          <span>Very much</span>
+        </div>
       </div>
 
-      {/* Axis labels */}
-      <div className="flex justify-between text-[10px] font-medium text-gray-400 px-1 select-none">
-        <span>← Disagree</span>
-        <span>Agree →</span>
+      <div className="rounded-full bg-slate-50 px-4 py-3 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Selected</p>
+        <p className={cn('mt-1 text-sm font-semibold', selectedMeta?.tone ?? 'text-slate-500')}>
+          {selectedMeta?.short ?? 'Slide to respond'}
+        </p>
       </div>
     </div>
   );
@@ -265,7 +287,7 @@ interface VoiceButtonProps {
 
 function VoiceButton({ isListening, isUnsupported, transcript, onToggle }: VoiceButtonProps) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-col items-end gap-2">
       <motion.button
         onClick={onToggle}
         disabled={isUnsupported}
@@ -277,16 +299,16 @@ function VoiceButton({ isListening, isUnsupported, transcript, onToggle }: Voice
             ? 'Voice input unavailable in this browser'
             : isListening
             ? 'Tap to stop recording'
-            : 'Tap to speak your answer'
+            : 'Tap to answer by voice'
         }
         className={cn(
-          'relative w-11 h-11 rounded-full flex items-center justify-center transition-colors',
+          'relative flex size-10 items-center justify-center rounded-full border transition-colors',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
           isUnsupported
-            ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+            ? 'border-slate-200 bg-slate-100 text-slate-300 cursor-not-allowed'
             : isListening
-            ? 'bg-red-500 text-white shadow-lg shadow-red-200'
-            : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100',
+            ? 'border-red-400 bg-red-500 text-white shadow-lg shadow-red-200'
+            : 'border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50',
         )}
       >
         {isListening ? <MicOff size={18} /> : <Mic size={18} />}
@@ -302,32 +324,29 @@ function VoiceButton({ isListening, isUnsupported, transcript, onToggle }: Voice
         )}
       </motion.button>
 
-      {/* Live transcript bubble */}
       <AnimatePresence>
-        {isListening && (
+        {(isListening || transcript) && (
           <motion.div
-            key="transcript"
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -8 }}
-            className="flex-1 min-w-0 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2"
+            key={isListening ? 'transcript-live' : 'transcript-done'}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className={cn(
+              'max-w-[140px] rounded-2xl border px-3 py-2 text-right shadow-sm',
+              isListening
+                ? 'border-red-100 bg-white'
+                : 'border-indigo-100 bg-indigo-50/80',
+            )}
           >
-            <p className="text-xs text-gray-500 mb-0.5 font-medium">Listening…</p>
-            <p className="text-xs text-gray-800 truncate">
+            <p className={cn(
+              'mb-0.5 text-[11px] font-semibold uppercase tracking-[0.16em]',
+              isListening ? 'text-red-500' : 'text-indigo-500',
+            )}>
+              {isListening ? 'Listening' : 'Voice applied'}
+            </p>
+            <p className="text-xs text-slate-700 line-clamp-3">
               {transcript || <span className="italic text-gray-400">speak now</span>}
             </p>
-          </motion.div>
-        )}
-        {!isListening && transcript && (
-          <motion.div
-            key="done-transcript"
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0 }}
-            className="flex-1 min-w-0 bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2"
-          >
-            <p className="text-xs text-indigo-500 mb-0.5 font-medium">Applied from voice</p>
-            <p className="text-xs text-indigo-900 truncate">{transcript}</p>
           </motion.div>
         )}
       </AnimatePresence>
@@ -471,7 +490,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 text-center max-w-sm mx-auto"
+        className="mx-auto max-w-xl rounded-[32px] border border-gray-100 bg-white p-9 text-center shadow-xl"
       >
         <motion.div
           initial={{ scale: 0 }}
@@ -491,22 +510,22 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
   // ─── Render: question card ─────────────────────────────────────────────────
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden max-w-sm mx-auto w-full">
+    <div className="mx-auto w-full max-w-xl overflow-hidden rounded-[32px] border border-gray-100 bg-white shadow-xl">
 
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+      <div className="flex items-center justify-between border-b border-slate-100 px-6 pt-5 pb-4">
         <div>
-          <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mb-0.5">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-indigo-500">
             Quick follow-up
           </p>
-          <div className="flex gap-1">
+          <div className="flex gap-1.5">
             {questions.map((_, i) => (
               <div
                 key={i}
                 className={cn(
-                  'h-1 rounded-full transition-all duration-300',
-                  i <= step ? 'bg-indigo-500' : 'bg-gray-200',
-                  i === step ? 'w-6' : 'w-2',
+                  'h-1.5 rounded-full transition-all duration-300',
+                  i <= step ? 'bg-indigo-500' : 'bg-slate-200',
+                  i === step ? 'w-8' : 'w-2.5',
                 )}
               />
             ))}
@@ -515,7 +534,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
         <button
           onClick={onDismiss}
           disabled={isSubmitting}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="flex size-9 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           aria-label="Skip follow-up questions"
         >
           <X size={16} />
@@ -523,7 +542,21 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
       </div>
 
       {/* ── Question body (animated slide-in per step) ── */}
-      <div className="px-5 pt-5 pb-2 min-h-[260px]">
+      <div className="min-h-[360px] px-6 pb-3 pt-6">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">
+              Question {step + 1} of {questions.length}
+            </p>
+          </div>
+          <VoiceButton
+            isListening={isListening}
+            isUnsupported={isUnsupported}
+            transcript={transcript}
+            onToggle={toggleMic}
+          />
+        </div>
+
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -535,7 +568,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
             {current.ui_type === 'Slider' && (
               <SemanticSlider
                 question={current}
-                value={answer.quantitative_value ?? 0.5}
+                value={answer.quantitative_value}
                 onChange={setSliderValue}
               />
             )}
@@ -562,20 +595,10 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
         </AnimatePresence>
       </div>
 
-      {/* ── Persistent Voice row ── */}
-      <div className="px-5 py-3 border-t border-gray-100">
-        <VoiceButton
-          isListening={isListening}
-          isUnsupported={isUnsupported}
-          transcript={transcript}
-          onToggle={toggleMic}
-        />
-      </div>
-
       {/* ── Footer: Next / Submit ── */}
-      <div className="px-5 pb-5 pt-2">
+      <div className="border-t border-slate-100 px-6 pb-6 pt-4">
         {submitError ? (
-          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          <p className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
             {submitError}
           </p>
         ) : null}
@@ -585,10 +608,10 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
           disabled={!canAdvance || isSubmitting}
           whileTap={canAdvance && !isSubmitting ? { scale: 0.97 } : {}}
           className={cn(
-            'w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200',
+            'flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold transition-all duration-200',
             canAdvance && !isSubmitting
-              ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-100'
-              : 'bg-gray-100 text-gray-300 cursor-not-allowed',
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100 hover:bg-indigo-700'
+              : 'cursor-not-allowed bg-slate-100 text-slate-300',
           )}
         >
           {isSubmitting ? (
@@ -603,7 +626,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
         <button
           onClick={onDismiss}
           disabled={isSubmitting}
-          className="w-full mt-2 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          className="mt-2 w-full py-2 text-xs text-slate-400 transition-colors hover:text-slate-600"
         >
           Skip all follow-ups
         </button>
