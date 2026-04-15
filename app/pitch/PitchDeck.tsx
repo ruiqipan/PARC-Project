@@ -364,44 +364,43 @@ export default function PitchDeck() {
             </div>
           </div>
 
-          <div className="flex flex-col p-8 rounded-[2rem] bg-slate-900 text-white shadow-xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-[60px] group-hover:bg-blue-500/20 transition-all"></div>
+          <div className="flex flex-col p-8 rounded-[2rem] bg-white border border-slate-200 shadow-sm relative overflow-hidden">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-white/10 rounded-xl"><Zap className="text-yellow-400" /></div>
-              <h4 className="text-xl font-bold">第三层: 最终紧急度评分<br/><span className="text-xs font-mono text-slate-500 font-normal">Follow-up Prioritization Engine</span></h4>
+              <div className="p-3 bg-yellow-50 rounded-xl"><Zap className="text-yellow-500" /></div>
+              <h4 className="text-xl font-bold text-slate-900">第三层: 最终紧急度评分<br/><span className="text-xs font-mono text-slate-400 font-normal">Follow-up Prioritization Engine</span></h4>
             </div>
 
             <div className="space-y-4 pt-4">
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between animate-pulse">
+              <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex items-center justify-between animate-pulse">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-500 uppercase">Current Top Priority</div>
-                  <div className="text-lg font-bold">Safety <span className="text-xs font-normal text-red-500">(STALE)</span></div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Current Top Priority</div>
+                  <div className="text-lg font-bold text-slate-900">Safety <span className="text-xs font-normal text-red-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-red-500 font-mono">9.8</div>
               </div>
 
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between">
+              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-500 uppercase">High Priority</div>
-                  <div className="text-lg font-bold">Wifi <span className="text-xs font-normal text-yellow-500">(STALE)</span></div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">High Priority</div>
+                  <div className="text-lg font-bold text-slate-900">Wifi <span className="text-xs font-normal text-yellow-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-yellow-500 font-mono">7.2</div>
               </div>
 
-              <div className="p-4 bg-white/5 rounded-2xl border border-white/10 flex items-center justify-between opacity-50">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between opacity-60">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-500 uppercase">Low Priority</div>
-                  <div className="text-lg font-bold">Gym <span className="text-xs font-normal text-blue-500">(STALE)</span></div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Low Priority</div>
+                  <div className="text-lg font-bold text-slate-900">Gym <span className="text-xs font-normal text-blue-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-blue-500 font-mono">1.5</div>
               </div>
             </div>
 
             <div className="mt-auto pt-8">
-              <div className="p-4 rounded-xl bg-blue-500 text-center font-bold text-sm flex items-center justify-center gap-2">
-                <Zap /> Triggering Follow-up Questions
+              <div className="p-4 rounded-xl bg-blue-600 text-white text-center font-bold text-sm flex items-center justify-center gap-2">
+                <Zap className="w-4 h-4" /> Triggering Follow-up Questions
               </div>
-              <div className="mt-4 text-[10px] font-mono text-slate-500 text-center">
+              <div className="mt-4 text-[10px] font-mono text-slate-400 text-center">
                 Formula: risk_weight × staleness × persona_multiplier
               </div>
             </div>
