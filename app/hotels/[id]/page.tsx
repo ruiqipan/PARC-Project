@@ -39,6 +39,10 @@ function getReviewTimestamp(review: Review): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function getReviewSourcePriority(review: Review): number {
+  return review.source_type === 'review_submissions' ? 1 : 0;
+}
+
 function getReviewSimilarityScore(review: Review, userTags: string[]): number {
   if (userTags.length === 0) {
     return 0;
@@ -57,6 +61,11 @@ function getReviewSimilarityScore(review: Review, userTags: string[]): number {
 
 function sortReviews(reviews: Review[], userTags: string[]): Review[] {
   return [...reviews].sort((a, b) => {
+    const sourcePriorityDelta = getReviewSourcePriority(b) - getReviewSourcePriority(a);
+    if (sourcePriorityDelta !== 0) {
+      return sourcePriorityDelta;
+    }
+
     const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
     if (priorityDelta !== 0) {
       return priorityDelta;

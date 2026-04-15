@@ -64,11 +64,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Footer */}
         <footer className="bg-gray-900 text-gray-400 mt-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center justify-between gap-4">
               <span className="text-white font-bold text-lg">PARC</span>
-              <p className="text-xs text-gray-500">
-                © {new Date().getFullYear()} Expedia Hotels. All rights reserved.
-              </p>
             </div>
           </div>
         </footer>

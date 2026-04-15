@@ -55,8 +55,22 @@ interface SemanticSliderProps {
   onChange: (v: number) => void;
 }
 
+function getTrackPercent(track: HTMLDivElement | null, clientX: number): number | null {
+  if (!track) {
+    return null;
+  }
+
+  const rect = track.getBoundingClientRect();
+  if (rect.width <= 0) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+}
+
 function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const resolvedValue = value ?? 0.5;
 
   // Spring-animate the fill width so NLP nudges feel physical, not instant.
@@ -68,11 +82,37 @@ function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
     rawMotion.set(resolvedValue);
   }, [resolvedValue, rawMotion]);
 
-  const handleTrackClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    onChange(pct);
+  const updateValueFromClientX = (clientX: number) => {
+    const pct = getTrackPercent(trackRef.current, clientX);
+    if (pct !== null) {
+      onChange(pct);
+    }
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateValueFromClientX(event.clientX);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    updateValueFromClientX(event.clientX);
+  };
+
+  const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    draggingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    updateValueFromClientX(event.clientX);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -107,8 +147,11 @@ function SemanticSlider({ question, value, onChange }: SemanticSliderProps) {
         aria-label={question.prompt}
         tabIndex={0}
         onKeyDown={handleKeyDown}
-        onClick={handleTrackClick}
-        className="relative h-5 cursor-pointer rounded-full bg-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        className="relative h-5 cursor-pointer touch-none rounded-full bg-slate-200/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       >
         {/* Filled portion */}
         <motion.div
@@ -156,15 +199,44 @@ const AGREEMENT_LABELS: Record<number, { short: string; tone: string }> = {
 
 function AgreementAxis({ question, value, onChange }: AgreementAxisProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
   const resolvedValue = value ?? 3;
   const ratio = (resolvedValue - 1) / 4;
   const selectedMeta = value === null ? null : AGREEMENT_LABELS[resolvedValue];
 
-  const handleTrackClick = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!trackRef.current) return;
-    const rect = trackRef.current.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+  const updateValueFromClientX = (clientX: number) => {
+    const pct = getTrackPercent(trackRef.current, clientX);
+    if (pct === null) {
+      return;
+    }
+
     onChange(Math.max(1, Math.min(5, Math.round(pct * 4) + 1)));
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    draggingRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateValueFromClientX(event.clientX);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    updateValueFromClientX(event.clientX);
+  };
+
+  const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingRef.current) {
+      return;
+    }
+
+    draggingRef.current = false;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    updateValueFromClientX(event.clientX);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -190,8 +262,11 @@ function AgreementAxis({ question, value, onChange }: AgreementAxisProps) {
           aria-label={question.statement}
           tabIndex={0}
           onKeyDown={handleKeyDown}
-          onClick={handleTrackClick}
-          className="relative h-5 cursor-pointer rounded-full bg-gradient-to-r from-rose-200 via-slate-200 to-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          className="relative h-5 cursor-pointer touch-none rounded-full bg-gradient-to-r from-rose-200 via-slate-200 to-emerald-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
         >
           <motion.div
             className="absolute top-1/2 size-7 -translate-y-1/2 rounded-full border-[3px] border-indigo-500 bg-white shadow-lg shadow-indigo-200"

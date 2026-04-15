@@ -1,238 +1,231 @@
-# Product Requirements Document (PRD): PARC APP
+# Product Requirements Document: PARC Hotels
 
-**Version:** 2.2  
+**Version:** 2.3  
 **Last Updated:** 2026-04-15  
-**Status:** Active Development
+**Status:** Active Prototype / Demo-Ready
 
----
+## 1. Product Summary
 
-## 1. Executive Summary
+PARC Hotels is a persona-aware hotel review experience designed to make review reading more relevant and review writing more useful. The app combines imported property/review data with app-managed profile, review, enrichment, and follow-up layers so that travelers see reviews that better match their needs and can contribute structured information with low effort.
 
-PARC APP is a next-generation hotel booking and review platform designed to solve the problem of stagnant, unverified, or irrelevant hotel reviews.
+## 2. Core Product Goals
 
-**The Core Innovation:** Instead of relying solely on users to write comprehensive reviews from scratch, PARC APP actively identifies "Information Gaps" using a 4-Layer Recommendation Engine. After a user leaves a standard review, the platform dynamically generates 1-2 highly personalized, low-friction, multi-modal follow-up questions to fill specific knowledge gaps in the database.
+- Help readers find the most relevant reviews faster.
+- Reduce the effort required to write a useful review.
+- Refresh stale hotel knowledge without requiring long-form follow-up writing.
+- Keep AI assistance conservative, inspectable, and grounded in user-provided text.
 
----
+## 3. Primary User Flows
 
-## 2. Value Proposition
+### Onboarding and identity
 
-- **For Users (Readers):** Higher trust in reviews through "Persona Similarity" clustering, ensuring they read reviews from people who share their specific travel needs and sensitivities.
-- **For Users (Writers):** A frictionless review process leveraging AI Polish and multi-modal inputs (voice, sliders), reducing cognitive load.
-- **For the Platform:** An ever-updating, self-healing database that automatically verifies decaying information and tests hotel marketing claims against actual user experiences.
+1. User is redirected to `/login` if no PARC session cookies exist.
+2. User enters a username.
+3. App creates or restores a stable `user_id`.
+4. User completes `/onboarding` and saves persona tags into `User_Personas`.
 
----
+### Hotel discovery
 
-## 3. Core User Flows
+1. User opens `/`.
+2. Hotels are grouped into United States first, then International.
+3. Within each group, hotels are sorted by `guestrating_avg_expedia`.
+4. Each card links into `/hotels/[id]`.
 
-- **Onboarding:** First-time visitor lands on `/` → proxy detects no session cookie → redirects to `/login` → user enters username → redirected to `/onboarding` → user selects identity/preference tags (or skips) → persona saved to `User_Personas` → redirected to hotel feed.
-- **Browsing:** User browses hotel list (sorted by guest rating, US-first) → opens hotel detail page → reads reviews with persona similarity badges.
-- **Drafting a Review:** User opens review form on hotel detail page → uses Quick Tags and/or voice input → optionally clicks "AI Polish" to structure the review → submits → review saved to `Review_Submissions`.
-- **Follow-Up (The "Aha" Moment):** After review submission → 4-Layer Engine queries `Description_PROC`, `Reviews_PROC`, and recent `Review_Submissions` for gaps → positive reviews receive 1 verification question, while non-positive reviews receive 2 lightweight questions (problem confirmation + reason isolation) → user answers via tap, text, or voice → answers are written to `FollowUp_Answers` and the review feed refreshes.
+### Review reading
 
----
+1. Hotel detail page loads both imported `Reviews_PROC` rows and app-authored `Review_Submissions`.
+2. Reviews are ranked by:
+   - whether title/body content exists,
+   - whether content is meaningful,
+   - persona-match strength,
+   - recency.
+3. Review feed shows 20 reviews at a time.
+4. Only the currently visible slice is sent to review enrichment.
 
-## 4. Detailed Feature Specifications
+### Review writing and follow-up
 
-### Feature 1: User Onboarding & Persona Engine
-**Status: Fully Implemented**
+1. User opens the Reviews tab.
+2. User can draft with quick tags, seeded Q&A prompts, voice input, manual text, and optional AI polish.
+3. Review is inserted into `Review_Submissions`.
+4. A deterministic follow-up engine returns:
+   - 1 question for positive reviews,
+   - 2 questions for non-positive reviews.
+5. User answers via slider, agreement scale, or voice-assisted input.
+6. Responses are written to `FollowUp_Answers`.
 
-- Users select broad identity and preference tags on first visit (e.g., Business traveler, Wheelchair user, Guide dog owner, Neurodivergent, Tourist).
-- 55 curated preset tags across 6 groups: Travel Style, Trip Purpose, Accessibility, Sensory & Health, Companions & Household, Priorities & Preferences.
-- Users can add custom tags (Enter/comma to confirm). Tags can be skipped and updated anytime via `/onboarding`.
-- Tags and categories saved as parallel arrays in `User_Personas` (one row per user, upserted on save).
-- Username-based session identity managed via `parc_user_id` and `parc_username` cookies (1-year expiry, set during login).
+## 4. Feature Requirements
 
-### Feature 2: Review Similarity Indicator
-**Status: Fully Implemented**
+### Feature 1: Persona Profile
+**Status:** Implemented
 
-- In the hotel review feed, each `ReviewCard` displays a similarity badge beneath the review metadata.
-- Reviewer tags are inferred from `lob` (line of business) and high-scoring rating dimensions in `Reviews_PROC`.
-- Reviews with missing titles or missing stored reviewer tags are enriched from the app-managed `Review_Enrichments` cache (title + up to 3 tags). The source review tables remain unchanged.
-- The hotel review feed renders 20 reviews at a time. `POST /api/reviews/enrich` only requests enrichment for the currently visible slice, not the full dataset at once.
-- AI-generated titles and tags are explicitly labeled in the UI. Generated titles show a sparkles icon plus info hint; generated tags show the same treatment beside the tag chips.
-- The enrichment prompt is intentionally conservative: it avoids over-deduction, prefers empty output over weak guesses, and only emits titles/tags that are supported by the review text.
-- Logic uses static semantic cluster map covering the curated preset library plus review-derived synonyms (zero-latency). Examples:
-  - User tag "Quiet" + reviewer high `roomcomfort` score → "Shares your focus: Quiet / Comfort"
-  - User tag "Business traveler" + reviewer `lob = "business"` → "Similar traveler type: Business"
-- Optional async embedding fallback available for custom tags (OpenAI `text-embedding-3-small`).
-- Does not require exact string matches.
+- 55 curated preset tags across 6 groups.
+- Supports custom tags.
+- Tags and categories are stored as parallel arrays in `User_Personas`.
+- Profile can be edited after onboarding from `/onboarding`.
 
-### Feature 3: AI-Assisted Review Creation
-**Status: Fully Implemented**
+### Feature 2: Persona-Aware Review Ranking and Similarity
+**Status:** Implemented
 
-- **Quick Tags:** 8 one-click dimensional stubs (Location, Facilities, Cleanliness, Service, WiFi, Breakfast, Value, Noise) that append a neutral prefix to the textarea for the user to complete.
-- **Top Q&A Carousel:** 6 pre-written community questions displayed 2 at a time; clicking a card appends a seed phrase to the textarea.
-- **Voice Input:** Live Web Speech API capture. Mic button toggles listening; recognized speech appends to textarea in real time. Pulses red while active.
-- **AI Polish:** Sends raw text to `/api/ai-polish` (OpenAI `gpt-4o`, temperature 0.3). Returns a structured 2-4 sentence review. Strict anti-hallucination guardrails — AI only formats, never invents facts. Undo polish supported.
-- **Submission:** Review saved to `Review_Submissions` with `raw_text`, `ai_polished_text`, and `eg_property_id`.
+- Review cards display a purple similarity badge when a review shares semantic clusters with the current user.
+- Similarity uses `matchPersonaTags()` plus inferred reviewer tags from:
+  - `lob`,
+  - rating sub-dimensions,
+  - AI enrichment fallback when stored metadata is sparse.
+- Similarity affects feed order, not just display.
+- Shared tags are surfaced in the purple badge first; blue reviewer tags omit duplicated shared tags.
 
-### Feature 4: The 4-Layer Question Recommendation Engine
-**Status: Fully Implemented**
+### Feature 3: Conservative Review Enrichment
+**Status:** Implemented
 
-Triggered via `POST /api/reviews/follow-up` immediately after a review is submitted. Returns 1-2 JSON question objects for the follow-up UI.
+- Sparse reviews can receive:
+  - an AI-generated display title,
+  - up to 3 AI-generated reviewer tags.
+- Enrichment is cached in `Review_Enrichments`.
+- Source review tables remain unchanged.
+- Enrichment only runs for the visible review slice.
+- The prompt is intentionally conservative and may return empty results when evidence is weak.
+- Historical `Reviews_PROC` rows have already been backfilled into the enrichment cache.
 
-1. **Property Memory Decay Engine (Layer 1):** Scans historical reviews plus recent `Review_Submissions` for 15 tracked attributes (parking, breakfast, wifi, pet policy, construction, cleanliness, etc.). Flags attributes not mentioned within their decay window (7 days for cleanliness → 365 days for transit proximity).
+### Feature 4: AI-Assisted Review Drafting
+**Status:** Implemented
 
-2. **Review Blind Spot Detector (Layer 2):** Reads hotel claims from `Description_PROC` (amenity flags, policy fields). Cross-references against the review corpus. If a claimed feature has no recent reviewer confirmation, it becomes a high-priority gap.
+- Quick tags append dimension-specific review starters.
+- Q&A carousel provides seeded prompt fragments.
+- Browser voice input appends dictated text into the draft.
+- AI Polish rewrites raw notes into a cleaner review without inventing facts.
+- Translation is available per review card in the review feed.
 
-3. **Personalized Persona Matching (Layer 3):** Loads the submitting user's tags from `User_Personas`. Boosts gap priority for attributes relevant to those tags across the 55-tag preset library (e.g., "Pet owner" → pet_policy, "Business traveler" → wifi).
+### Feature 5: Deterministic Follow-Up Engine
+**Status:** Implemented
 
-4. **Decision-Risk Minimization (Layer 4):** Merges duplicate gaps, applies deal-breaker weights (safety=10, accessibility=10, late_checkin=8, wifi=7, … breakfast_quality=2), and selects the most decision-relevant gap for the current review context.
+The live engine is deterministic and heuristic-driven. It ranks property information gaps using four layers:
 
-5. **Review-Aware Question Selection:** The final question set is generated deterministically from the ranked gaps plus the submitted review itself:
-  - Positive review → ask exactly 1 high-value verification / refresh question
-  - Non-positive review → ask exactly 2 questions: one to confirm the main pain point, and one to isolate the likely reason
-  - Phrasing is persona-aware and intentionally optimized for “confirm a statement” rather than open-ended writing
+1. **Memory decay:** attributes not refreshed recently lose confidence.
+2. **Blind spots:** claimed amenities/policies without reviewer confirmation are boosted.
+3. **Persona boosts:** user tags raise the priority of relevant attributes.
+4. **Decision-risk ranking:** attributes are weighted by expected decision impact.
 
-### Feature 5: Low-Friction Follow-Up UI
-**Status: Fully Implemented**
+Output behavior:
 
-Converts open-ended questions into "Statements for Confirmation" (Recognition over Recall).
+- Positive review -> 1 verification-style question
+- Non-positive review -> 2 questions:
+  - severity / agreement
+  - likely reason isolation
 
-- **Semantic Sliders:** For degree-based questions (e.g., Lighting: Soft ↔ Office White). Returns 0–1 float.
-- **Agreement Axis:** 1-5 Likert scale for statement validation (e.g., "This hotel is very dog friendly: Disagree → Agree").
-- **Quick Tag Grid:** Multi-select chip grid is supported by the UI component for future categorical follow-ups, though the current production engine emits only Slider and Agreement questions.
-- **Continuous Multi-Modal:** Persistent microphone button on every question state. Voice transcript is mapped to slider/agreement values via NLP keyword matching with intensity modifiers (very/slightly/not negation support).
-- **Persistence:** Submitted follow-up answers are written to `FollowUp_Answers` via a dedicated route handler.
-- Animated slide transitions between questions (Framer Motion). Completion screen on finish.
+### Feature 6: Low-Friction Follow-Up UI
+**Status:** Implemented
 
----
+- Slider questions for continuous attributes
+- Agreement scale for confirm/deny statements
+- Voice-to-slider and voice-to-agreement mapping via heuristics
+- Animated multi-step UI
+- Completion state after answer submission
 
-## 5. Technical Architecture & Tech Stack
+Current note:
 
-### Stack
+- The UI code still contains a `QuickTag` path for future expansion, but the live engine currently emits only `Slider` and `Agreement`.
 
-| Layer | Choice |
-|---|---|
-| Framework | Next.js 16.2.3 (App Router, React 19) |
-| Styling | Tailwind CSS v4, Framer Motion 12 |
-| Database & Auth | Supabase (PostgreSQL) — username-based session via cookies |
-| LLM | OpenAI `gpt-4o` (review polish) |
-| Embeddings | OpenAI `text-embedding-3-small` (optional persona matching fallback) |
-| Audio | Web Speech API (browser-native, no API key required) |
-| Deployment | Vercel (Next.js native) |
+## 5. Technical Architecture
 
-### Database Schema
+### Frontend
 
-**`Description_PROC`** *(read-only — CSV import, never modified by app)*
-```
-eg_property_id  Text  PK
-city, province, country, star_rating, guestrating_avg_expedia
-property_description, area_description
-popular_amenities_list  JSONB
-property_amenity_*      JSONB / Text  (14 amenity category columns)
-check_in_start_time, check_in_end_time, check_out_time
-check_out_policy, pet_policy, children_and_extra_bed_policy  JSONB
-check_in_instructions  JSONB
-know_before_you_go      Text
-```
+- Next.js 16.2.3 App Router
+- React 19
+- Tailwind CSS v4
+- Framer Motion for transitions and animated follow-up UI
 
-**`Reviews_PROC`** *(read-only — CSV import, never modified by app)*
-```
-eg_property_id   Text  FK → Description_PROC
-acquisition_date Date
-lob              Text
-rating           JSONB  (overall + 15 sub-dimension scores)
-review_title     Text
-review_text      Text
-```
+### Backend
 
-**`User_Personas`** *(app-managed)*
-```
-id         UUID  PK
-user_id    Text  NOT NULL  (stable app session user ID from cookie session)
-username   Text  NOT NULL  (login handle, unique per user)
-tags       Text[]  (e.g., ['Business traveler', 'Quiet', 'Pet owner'])
-categories Text[]  (parallel array, e.g., ['Travel Style', 'Trip Purpose', 'Priorities & Preferences'])
-updated_at Timestamp
-UNIQUE (user_id)
-```
+- Next.js route handlers
+- Supabase as operational datastore
+- Cookie-based session model instead of Supabase Auth
 
-**`Review_Submissions`** *(app-managed)*
-```
-id               UUID  PK
-eg_property_id   Text
-user_id          Text  (nullable — username-session user when available)
-raw_text         Text
-ai_polished_text Text
-sentiment_score  Float  (nullable — not yet computed)
-created_at       Timestamp
-```
+### AI usage
 
-**`Review_Enrichments`** *(app-managed cache)*
-```
-id               UUID  PK
-source_type      Text  ('reviews_proc' | 'review_submissions')
-review_key       Text  UNIQUE
-eg_property_id   Text
-source_text_hash Text
-generated_title  Text
-generated_tags   Text[]
-title_model      Text
-tags_model       Text
-created_at       Timestamp
-updated_at       Timestamp
-```
+- `gpt-4o`
+  - `/api/ai-polish`
+  - `/api/reviews/translate`
+- `gpt-5-nano`
+  - `/api/reviews/enrich`
+- `text-embedding-3-small`
+  - optional fallback path in `persona-match.ts` for custom tag matching
 
-Operational notes:
-- Cache entries are keyed by a deterministic `review_key`, deduped before persistence, and re-used whenever the review text hash matches.
-- An enrichment row may intentionally contain an empty title and/or empty tags when the model cannot confidently infer them; this still counts as a completed cache result and prevents endless regeneration.
-- As of 2026-04-15, `Reviews_PROC` has been fully backfilled into `Review_Enrichments` for all unique non-empty review texts.
+## 6. Data Model
 
-**`FollowUp_Answers`** *(app-managed — live write path implemented)*
-```
-id                 UUID  PK
-review_id          UUID  FK → Review_Submissions
-feature_name       Text  (e.g., 'WiFi', 'Parking')
-ui_type            Enum  ('Slider' | 'Agreement')
-quantitative_value Numeric  (0–1 for Slider, 1–5 for Agreement)
-qualitative_note   Text  (optional voice/text transcription)
-created_at         Timestamp
-```
+### Imported source tables
 
----
+**`Description_PROC`**
+- Property metadata, location, amenities, policies, guest rating, descriptions
 
-## 6. API Routes
+**`Reviews_PROC`**
+- Historical imported reviews
+- Includes `lob`, `rating`, `review_title`, `review_text`, `acquisition_date`
 
-| Method | Endpoint | Status | Description |
-|---|---|---|---|
-| `POST` | `/api/ai-polish` | ✅ Live | Takes `rawText`, returns `polishedText` via GPT-4o |
-| `POST` | `/api/reviews/follow-up` | ✅ Live | Runs 4-Layer Engine, returns 1-2 follow-up question objects |
-| `POST` | `/api/reviews/follow-up/answers` | ✅ Live | Persists submitted follow-up answers to `FollowUp_Answers` |
-| `POST` | `/api/reviews/enrich` | ✅ Live | Reads or generates cached AI titles/tags for the currently visible review slice |
-| `POST` | `/api/session/login` | ✅ Live | Takes `username`, restores or creates a stable user session |
-| `POST` | `/api/session/logout` | ✅ Live | Clears `parc_user_id` and `parc_username` cookies |
+### App-managed tables
 
----
+**`User_Personas`**
+- `user_id UUID`
+- `username TEXT`
+- `tags TEXT[]`
+- `categories TEXT[]`
 
-## 7. Implementation Status
+**`Review_Submissions`**
+- `eg_property_id`
+- `user_id`
+- `username`
+- `raw_text`
+- `ai_polished_text`
+- `rating`
+- `sentiment_score` currently unused
 
-| Feature | Status | Notes |
-|---|---|---|
-| Persona Tagging (Onboarding) | ✅ Complete | 55 curated presets across 6 groups + custom tags, saved to `User_Personas` |
-| Review Similarity Badge | ✅ Complete | Semantic clustering, inferred from `lob` + rating dimensions |
-| Review Enrichment Cache | ✅ Complete | On-read enrichment for visible reviews plus completed `Reviews_PROC` backfill into `Review_Enrichments` |
-| Hotel Browsing & Detail | ✅ Complete | 4-tab detail page, all `Description_PROC` fields rendered |
-| Review Feed | ✅ Complete | Paginated 20/page, sub-ratings, date, LOB badge, conservative AI title/tag display |
-| Review Submission | ✅ Complete | Quick Tags, Q&A carousel, voice input, AI Polish, submit |
-| 4-Layer Follow-Up Engine | ✅ Complete | All 4 layers live, plus deterministic review-aware question selection (positive=1, non-positive=2) |
-| Follow-Up UI | ✅ Complete | Slider and Agreement flows are live end-to-end with voice NLP and post-submit rendering |
-| Proxy / Session | ✅ Complete | Username login, stable user ID cookies, onboarding redirect |
-| FollowUp_Answers persistence | ✅ Complete | Answers are written through `/api/reviews/follow-up/answers` after the user completes follow-up |
-| Sentiment Scoring | ⚠️ Partial | Column exists in `Review_Submissions`, always NULL |
-| User Authentication | ⚠️ Partial | Username-only session login is live; Supabase Auth is not yet integrated |
-| Review Filtering / Sorting | ❌ Not Started | Reviews displayed in date DESC order only |
-| Hotel Search | ❌ Not Started | No full-text search on hotels or reviews |
+**`Review_Enrichments`**
+- `review_key`
+- `source_type`
+- `source_text_hash`
+- `generated_title`
+- `generated_tags`
+- `title_model`
+- `tags_model`
 
----
+**`FollowUp_Answers`**
+- `review_id`
+- `feature_name`
+- `ui_type`
+- `quantitative_value`
+- `qualitative_note`
 
-## 8. Implementation Milestones
+## 7. Current API Endpoints
 
-| Phase | Scope | Status |
-|---|---|---|
-| **Phase 1** | Next.js scaffold, Supabase schema, persona tagging, hotel browsing feed | ✅ Done |
-| **Phase 2** | Review input with AI Polish, Similarity Badge on review feed | ✅ Done |
-| **Phase 3** | 4-Layer follow-up engine API, persona-aware gap detection | ✅ Done |
-| **Phase 4** | Follow-up UI (sliders/agreement), voice input with NLP, design polish | ✅ Done |
-| **Phase 5** | Persist `FollowUp_Answers`, sentiment scoring, review filtering/sorting | 🟡 In Progress |
-| **Phase 6** | Supabase Auth (replace anonymous session), hotel search | 🔲 Pending |
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/session/login` | Start or restore a username session |
+| `POST` | `/api/session/logout` | Clear cookies |
+| `POST` | `/api/ai-polish` | Rewrite raw review notes conservatively |
+| `POST` | `/api/reviews/translate` | Translate review text to target language |
+| `POST` | `/api/reviews/enrich` | Fetch or generate cached title/tag enrichments |
+| `POST` | `/api/reviews/follow-up` | Run the deterministic follow-up engine |
+| `POST` | `/api/reviews/follow-up/answers` | Persist follow-up answers |
+
+## 8. Non-Goals / Deferred Work
+
+- Full Supabase Auth integration
+- Search across hotels or reviews
+- Server-side review filtering beyond current ranking logic
+- Production-grade analytics and observability
+- Automatic sentiment scoring for `Review_Submissions`
+
+## 9. Known Technical Constraints
+
+- Session identity is username-based and cookie-backed, which is sufficient for the demo but weaker than true auth.
+- Homepage review counts are currently computed with per-hotel count queries, which is simple but not optimal at larger scale.
+- A legacy `/api/personas` route still exists in the repo but is not the active onboarding write path.
+- `QuickTag` follow-up support exists in UI/types, but persistence schema still effectively targets the currently emitted `Slider` and `Agreement` flows.
+- The checked-in schema references for `Review_Submissions` lag behind the active write path, which already expects `username` and `rating` columns.
+
+## 10. Success Criteria for This Prototype
+
+- A traveler can create a persona and see review relevance change accordingly.
+- Sparse review cards become more scannable through conservative enrichment.
+- A user can submit a review with less friction than a blank freeform form.
+- The system can capture structured follow-up data after submission.
+- Product and technical docs stay aligned with the actual implementation.

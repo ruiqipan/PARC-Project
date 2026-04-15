@@ -194,7 +194,7 @@ export default function ReviewCard({
       .filter(tag => !matchedTags.has(tag.toLowerCase()))
       .slice(0, 3);
   }, [resolvedReviewerTags, matches]);
-  const displayTitle = review.review_title?.trim() || review.generated_title?.trim() || review.reviewer_name?.trim() || null;
+  const displayTitle = review.review_title?.trim() || review.generated_title?.trim() || null;
   const showsAiTitle = !review.review_title?.trim() && Boolean(review.generated_title?.trim()) && review.title_was_ai_generated;
   const showsAiTags = Boolean(review.tags_was_ai_generated && resolvedReviewerTags.length > 0);
   const displayedReviewText = translatedText || review.review_text;

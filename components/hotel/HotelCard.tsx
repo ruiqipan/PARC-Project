@@ -70,6 +70,7 @@ export default function HotelCard({ hotel }: HotelCardProps) {
             <div className="absolute top-3 right-3 bg-black/25 backdrop-blur-sm rounded-full px-2 py-0.5">
               <span className="text-yellow-300 text-xs tracking-wide">
                 {'★'.repeat(Math.round(starRating))}
+                {'☆'.repeat(5 - Math.round(starRating))}
               </span>
             </div>
           )}

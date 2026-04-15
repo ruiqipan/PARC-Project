@@ -43,21 +43,6 @@ const QA_ITEMS: QAItem[] = [
   { id: 6, question: 'How was the noise level in your room?',              seed: 'The noise level in the room was ' },
 ];
 
-// ── Map follow-up engine questions → QAItem carousel cards ───────────────────
-
-function mapFollowUpToQAItems(questions: FollowUpQuestion[]): QAItem[] {
-  return questions.map((q, i) => {
-    const name = q.feature_name.replace(/_/g, ' ');
-    if (q.ui_type === 'Slider') {
-      return { id: 100 + i, question: q.prompt, seed: `The ${name} was ` };
-    } else if (q.ui_type === 'Agreement') {
-      return { id: 100 + i, question: q.statement, seed: `I think ${q.statement.toLowerCase()} — ` };
-    } else {
-      return { id: 100 + i, question: q.prompt, seed: q.options[0] ? `${q.options[0]}: ` : `${name}: ` };
-    }
-  });
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface ReviewInputProps {
@@ -93,8 +78,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
   const [followUpError, setFollowUpError] = useState('');
 
   // Q&A carousel
-  const [qaItems, setQaItems] = useState<QAItem[]>(QA_ITEMS);
-  const [qaLoading, setQaLoading] = useState(false);
+  const [qaItems] = useState<QAItem[]>(QA_ITEMS);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const visibleCount = 2; // cards visible at once
 
@@ -263,7 +247,6 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       }
 
       setFollowUpState('loading');
-      setQaLoading(true);
 
       try {
         const response = await fetch('/api/reviews/follow-up', {
@@ -289,12 +272,6 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
         const questions = Array.isArray((followUpData as FollowUpEngineResponse).questions)
           ? (followUpData as FollowUpEngineResponse).questions
           : [];
-        const newItems = mapFollowUpToQAItems(questions);
-
-        if (newItems.length > 0) {
-          setQaItems(newItems);
-          setCarouselIndex(0);
-        }
 
         if (questions.length === 0) {
           setFollowUpState('idle');
@@ -306,7 +283,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
         setFollowUpQuestions(questions);
         setFollowUpState('ready');
       } finally {
-        setQaLoading(false);
+        setCarouselIndex(0);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not save review. Please try again.';
@@ -398,12 +375,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       {/* ── Q&A Carousel ───────────────────────────────────────────────────── */}
       <div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-          Top Q&amp;A
-          {qaLoading && (
-            <svg className="size-3 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
-          )}
+          Other users would love to know
         </p>
         <div className="flex items-center gap-2">
           {/* Prev */}

@@ -1,139 +1,192 @@
-# PARC — Property Awareness & Review Completion
+# PARC Hotels
 
-**Wharton Hack-AI-thon 2026 · Expedia Group**
+PARC is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon. The app combines imported Expedia property/review data with app-authored reviews, lightweight username sessions, AI-assisted review polishing, conservative review enrichment, and a deterministic follow-up question engine.
 
-PARC detects information gaps in hotel reviews (missing, stale, conflicting) and asks travelers 1–2 targeted follow-up questions the moment they submit a review. Answers are collected via text buttons or voice (Whisper) and stored as structured property insights.
+## What the app does
 
----
+- Lets a user create a lightweight profile of travel needs and preferences.
+- Ranks hotel reviews higher when they share more persona-tag commonality with the current user.
+- Generates conservative AI review titles and tags for review cards that would otherwise be too sparse to scan.
+- Lets users write reviews with quick prompts, voice dictation, optional AI polish, and translation.
+- After a review is submitted, generates 1-2 follow-up questions to refresh stale or decision-critical property information.
 
-## Quick Setup (10 minutes)
+## Current stack
+
+| Layer | Implementation |
+| --- | --- |
+| Framework | Next.js 16.2.3 App Router |
+| UI | React 19, Tailwind CSS v4, Framer Motion |
+| Database | Supabase / PostgreSQL |
+| Session model | Cookie-based username session (`parc_user_id`, `parc_username`) |
+| LLM usage | OpenAI `gpt-4o` for polish + translation, `gpt-5-nano` for review enrichment |
+| Voice input | Browser Web Speech API |
+
+## Runtime architecture
+
+### Pages
+
+- `/login` — username-based session start
+- `/onboarding` — persona tag creation and profile editing
+- `/` — hotel listing page
+- `/hotels/[id]` — hotel detail page with overview, amenities, policies, reviews
+
+### Core app-managed tables
+
+- `User_Personas`
+- `Review_Submissions`
+- `Review_Enrichments`
+- `FollowUp_Answers`
+
+### Imported source-of-truth tables
+
+- `Description_PROC`
+- `Reviews_PROC`
+
+The app reads from the imported Expedia-style tables and writes all user-generated or AI-generated metadata into app-managed tables. It does not mutate `Description_PROC` or `Reviews_PROC`.
+
+## Key product flows
+
+### Session and persona flow
+
+1. User lands on the app.
+2. Middleware-style proxy redirects unauthenticated users to `/login`.
+3. Login creates or restores a stable `User_Personas.user_id`.
+4. User completes `/onboarding`, which writes selected tags and categories back to `User_Personas`.
+
+### Review browsing flow
+
+1. Hotel detail page loads imported reviews plus app-authored `Review_Submissions`.
+2. Reviews are sorted by:
+   - content completeness,
+   - meaningful content presence,
+   - persona-match strength,
+   - recency.
+3. The visible review slice is enriched on demand via `POST /api/reviews/enrich`.
+4. Review cards show:
+   - conservative AI-generated title/tag hints when applicable,
+   - persona similarity badge,
+   - reviewer tags that are not already represented in the similarity badge.
+
+### Review creation flow
+
+1. User writes a review with quick tags, seeded Q&A prompts, star rating, and optional voice dictation.
+2. Optional AI polish rewrites the review while preserving only explicitly stated facts.
+3. Review is inserted into `Review_Submissions`.
+4. If the user is logged in, the follow-up engine returns 1-2 additional questions.
+5. Answers are persisted to `FollowUp_Answers`.
+
+## API surface
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/session/login` | Start or restore a username-based session |
+| `POST` | `/api/session/logout` | Clear PARC session cookies |
+| `POST` | `/api/ai-polish` | Turn rough guest notes into a cleaner review without adding facts |
+| `POST` | `/api/reviews/translate` | Translate review text into a requested target language |
+| `POST` | `/api/reviews/enrich` | Read or generate cached review titles/tags for the currently visible review slice |
+| `POST` | `/api/reviews/follow-up` | Run the deterministic 4-layer follow-up engine |
+| `POST` | `/api/reviews/follow-up/answers` | Persist follow-up answers |
+| `POST` | `/api/personas` | Legacy route currently present in repo but not used by the active onboarding flow |
+
+## Local development
 
 ### 1. Install dependencies
+
 ```bash
 npm install
 ```
 
-### 2. Configure environment variables
-Copy `.env.local` and fill in your real values:
+### 2. Create `.env.local`
+
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-OPENAI_API_KEY=your_openai_api_key
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+OPENAI_API_KEY=...
 ```
 
-> **Security:** Never commit `.env.local` or put the OpenAI key in client-side code. The key is only used server-side via API routes.
+Notes:
 
-### 3. Set up Supabase database
+- `SUPABASE_SERVICE_ROLE_KEY` is strongly recommended for server routes and background enrichment.
+- `OPENAI_API_KEY` is only used server-side.
 
-**Step A — Import the official CSV datasets** (provided by Wharton/Expedia):
-- Go to Supabase Dashboard → Table Editor → Import CSV
-- Import `Description_PROC.csv` as table `hotels`
-- Import `Reviews_PROC.csv` as table `reviews`
-- Make sure `eg_property_id` is used as the join key between both tables
+### 3. Prepare the database
 
-**Step B — Run the schema migrations** (adds rooms, questions, responses, etc.):
-- Go to Supabase Dashboard → SQL Editor
-- Paste and run the contents of `supabase/schema.sql`
+Import the CSV-backed source tables into Supabase using the exact table names expected by the app:
 
-### 4. Seed rooms and questions
-After the schema is set up:
-```bash
-# In development — just call the seed endpoint
-curl -X POST http://localhost:3000/api/seed
-```
+- `Description_PROC`
+- `Reviews_PROC`
 
-This will:
-- Add room types to each hotel
-- Assign traveler personas to existing reviews
-- Run gap detection and pre-generate questions for each hotel
+For a fresh project, run the SQL in:
 
-### 5. Run the development server
+- `supabase/migrations/app_tables.sql`
+
+For an existing database that predates the latest app tables, also apply:
+
+- `supabase/migrations/20260414_add_username_to_user_personas.sql`
+- `supabase/migrations/20260415_add_review_enrichments.sql`
+
+### 4. Run the app
+
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000)
 
----
-
-## Core User Flow
-
-```
-Hotel List → Hotel Detail → "Write a Review" tab
-  → User writes review text
-  → PARC analyzes: what did they mention + what gaps exist in corpus?
-  → GPT-4o generates 1-2 targeted follow-up questions
-  → User answers via [Good] [Bad] [Not sure] buttons or 🎙️ voice
-  → Answers stored as structured property insights
-  → "You helped X future guests" confirmation
-```
-
----
-
-## Project Structure
-
-```
-app/
-  page.tsx                    # Hotel listing page
-  hotels/[slug]/
-    page.tsx                  # Server component — fetches data
-    HotelDetailClient.tsx     # Client component — tabs, persona
-  api/
-    questions/route.ts        # POST — generate follow-up questions (GPT-4o)
-    responses/route.ts        # POST — save Good/Bad/Unknown answer
-    feedback/route.ts         # POST — save question upvote/downvote
-    transcribe/route.ts       # POST — Whisper voice transcription
-    seed/route.ts             # POST — seed rooms, personas, questions
-
-components/
-  hotel/HotelCard.tsx         # Grid card on listing page
-  hotel/RoomTypeList.tsx      # Horizontal scroll of room types
-  hotel/ReviewFeed.tsx        # Filterable review list
-  question/ReviewAndQuestion.tsx  # The core PARC widget (write → questions → done)
-  persona/PersonaSelector.tsx # Traveler persona dropdown
-
-lib/
-  supabase.ts                 # Supabase client (lazy init)
-  gap-detector.ts             # Keyword-based gap detection algorithm
-  question-generator.ts       # GPT-4o question generation (with fallback)
-  topic-keywords.ts           # Topic keyword maps
-  seed-data.ts                # Room types and image URLs
-
-supabase/
-  schema.sql                  # Database migrations to run in Supabase
-types/
-  index.ts                    # All TypeScript interfaces
-```
-
----
-
-## Deployment (Vercel)
+### 5. Verify production build
 
 ```bash
-npm run build   # Verify clean build
+npm run build
 ```
 
-Deploy to Vercel:
-1. Push to GitHub
-2. Import project on vercel.com
-3. Add all `.env.local` values as Vercel Environment Variables
-4. Deploy — app is live
+## Repo layout
 
-> **Important:** Do NOT add `OPENAI_API_KEY` to `NEXT_PUBLIC_*` variables. It must stay server-only.
+```text
+app/
+  api/
+    ai-polish/
+    personas/
+    reviews/
+      enrich/
+      follow-up/
+      translate/
+    session/
+  hotels/[id]/
+  login/
+  onboarding/
 
----
+components/
+  auth/
+  hotel/
+  onboarding/
+  ui/
 
-## How the Gap Detection Works
+lib/
+  follow-up-engine.ts
+  hotel-visuals.ts
+  persona-match.ts
+  review-enrichment.ts
+  session.ts
+  supabase.ts
+  utils.ts
 
-1. **Missing** — topic mentioned in <15% of reviews (benchmark: other hotels ~40%)
-2. **Conflicting** — same topic has ≥25% positive AND negative mentions
-3. **Stale** — topic not mentioned in reviews from last 90 days
-4. **Periodic** — cleanliness always re-validated every ~30 reviews
+scripts/
+  backfill-review-enrichments.cjs
 
-## How Question Generation Works (3 cases)
+supabase/
+  migrations/
+  schema.sql
+  prd_schema.sql
+```
 
-**Case A** — Reviewer mentioned a gap topic → ask a deeper follow-up on that specific topic  
-**Case B** — Reviewer expressed negative sentiment → ask what specifically went wrong (structured complaint extraction)  
-**Case C** — No overlap with gap topics → ask about the most critical gap for their persona
+## Documentation
 
-Questions are generated by GPT-4o with the review text, property description, and gap analysis as context. Falls back to templates if OpenAI is unavailable.
+- Product requirements: [docs/PRD.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/PRD.md)
+- Technical overview: [docs/TECHNICAL_OVERVIEW.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/TECHNICAL_OVERVIEW.md)
+
+## Important technical notes
+
+- Review enrichment is intentionally conservative. Empty enrichment rows can still be valid cache results.
+- The follow-up engine is currently deterministic and heuristic-driven at runtime. It does not call an LLM to generate the live question text.
+- `Review_Enrichments` is designed as a display cache, not as a source-of-truth content table.
+- The repo still contains one legacy API route (`/api/personas`) that does not match the active session-cookie contract.
+- The checked-in `Review_Submissions` schema reference currently lags behind the live write path: the app code writes `username` and `rating`, so fresh environments should validate those columns before relying on the setup docs alone.
