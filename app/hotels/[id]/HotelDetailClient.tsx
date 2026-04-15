@@ -9,6 +9,11 @@ import { Hotel, Review } from '@/types';
 import ReviewFeed from '@/components/hotel/ReviewFeed';
 import ReviewInput from '@/components/hotel/ReviewInput';
 import {
+  filterHotelFieldItems,
+  isPopularAmenitySuppressed,
+  type HotelClaimSuppression,
+} from '@/lib/hotel-claim-suppression';
+import {
   parseArrayField,
   parseHtmlItems,
   stripHtml,
@@ -19,6 +24,7 @@ import {
 interface Props {
   hotel: Hotel;
   reviews: Review[];
+  claimSuppression: HotelClaimSuppression;
   userId?: string;
   username?: string;
   userTags?: string[];
@@ -65,6 +71,7 @@ type Tab = 'overview' | 'amenities' | 'policies' | 'reviews';
 export default function HotelDetailClient({
   hotel,
   reviews,
+  claimSuppression,
   userId,
   username,
   userTags = [],
@@ -76,14 +83,24 @@ export default function HotelDetailClient({
   const regionLine = [hotel.province, hotel.country].filter(Boolean).join(', ');
   const starRating = hotel.star_rating ? parseFloat(String(hotel.star_rating)) : null;
   const rating = hotel.guestrating_avg_expedia;
-  const popularAmenities = hotel.popular_amenities_list || [];
+  const popularAmenities = (hotel.popular_amenities_list || []).filter(
+    amenityKey => !isPopularAmenitySuppressed(amenityKey, claimSuppression),
+  );
   const visual = getHotelVisual(hotel);
   const [useFallbackHero, setUseFallbackHero] = useState(false);
   const heroSrc = useFallbackHero ? visual.fallbackSrc : visual.src;
 
   const checkOutPolicyItems = parseHtmlItems(hotel.check_out_policy);
-  const petPolicyItems = parseHtmlItems(hotel.pet_policy);
-  const childrenPolicyItems = parseHtmlItems(hotel.children_and_extra_bed_policy);
+  const petPolicyItems = filterHotelFieldItems(
+    'pet_policy',
+    parseHtmlItems(hotel.pet_policy),
+    claimSuppression,
+  );
+  const childrenPolicyItems = filterHotelFieldItems(
+    'children_and_extra_bed_policy',
+    parseHtmlItems(hotel.children_and_extra_bed_policy),
+    claimSuppression,
+  );
   const checkInInstructions = parseHtmlItems(hotel.check_in_instructions);
   const knowBeforeYouGo = parseHtmlItems(hotel.know_before_you_go);
 
@@ -235,7 +252,11 @@ export default function HotelDetailClient({
         {activeTab === 'amenities' && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {AMENITY_CATEGORY_KEYS.map(key => {
-              const items = parseArrayField((hotel as unknown as Record<string, unknown>)[key]);
+              const items = filterHotelFieldItems(
+                key,
+                parseArrayField((hotel as unknown as Record<string, unknown>)[key]),
+                claimSuppression,
+              );
               if (items.length === 0) return null;
               return (
                 <section key={key} className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">

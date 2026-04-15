@@ -5,6 +5,10 @@ import { Hotel, Review, UserPersona } from '@/types';
 import { getSession } from '@/lib/session';
 import { buildReviewsProcReviewKey } from '@/lib/review-enrichment';
 import { deriveReviewerTags, matchPersonaTags } from '@/lib/persona-match';
+import {
+  computeHotelClaimSuppression,
+  type StoredFollowUpAnswer,
+} from '@/lib/hotel-claim-suppression';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -117,9 +121,27 @@ async function getHotelData(id: string) {
 
     if (hotelError || !hotel) return null;
 
-    // Fetch persona tags for all submitters in one query
     const submissionList = (submissions ?? []) as Record<string, unknown>[];
     const historicReviewList = (historicReviews ?? []) as Record<string, unknown>[];
+    const submissionIds = submissionList
+      .map(submission => (typeof submission.id === 'string' ? submission.id : null))
+      .filter((value): value is string => Boolean(value));
+
+    let followUpAnswers: StoredFollowUpAnswer[] = [];
+    if (submissionIds.length > 0) {
+      const { data: answers } = await supabase
+        .from('FollowUp_Answers')
+        .select('review_id, feature_name, ui_type, quantitative_value, qualitative_note')
+        .in('review_id', submissionIds);
+
+      followUpAnswers = ((answers ?? []) as StoredFollowUpAnswer[]).filter(answer =>
+        typeof answer.review_id === 'string' &&
+        typeof answer.feature_name === 'string' &&
+        (answer.ui_type === 'Slider' || answer.ui_type === 'Agreement' || answer.ui_type === 'QuickTag'),
+      );
+    }
+
+    // Fetch persona tags for all submitters in one query
     const userIds = [...new Set(submissionList.map(s => s.user_id).filter(Boolean))] as string[];
     let personaMap: Record<string, string[]> = {};
     if (userIds.length > 0) {
@@ -166,7 +188,13 @@ async function getHotelData(id: string) {
 
     const reviews: Review[] = [...mappedSubmissions, ...mappedHistoricReviews];
 
-    return { hotel: hotel as Hotel, reviews };
+    const claimSuppression = computeHotelClaimSuppression(
+      hotel as Hotel,
+      reviews,
+      followUpAnswers,
+    );
+
+    return { hotel: hotel as Hotel, reviews, claimSuppression };
   } catch {
     return null;
   }
@@ -197,6 +225,7 @@ export default async function HotelDetailPage({ params }: PageProps) {
     <HotelDetailClient
       hotel={data.hotel}
       reviews={sortedReviews}
+      claimSuppression={data.claimSuppression}
       userId={session?.userId}
       username={session?.username}
       userTags={userTags}

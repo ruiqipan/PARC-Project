@@ -154,6 +154,12 @@ interface GeneratedQuestionCopy {
   narrowing_text?: string | null;
 }
 
+interface CustomTagInterpretation {
+  tag: string;
+  inferred_persona_tags: string[];
+  inferred_topics: string[];
+}
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ─── Attribute metadata ───────────────────────────────────────────────────────
@@ -295,6 +301,53 @@ const PERSONA_TOPIC_BUNDLES: PersonaTopicBundle = {
   'Eco-conscious':                  ['transit'],
 };
 
+const CUSTOM_TAG_TOPIC_HINTS: Array<{ keywords: string[]; topics: string[] }> = [
+  { keywords: ['business', 'conference', 'remote', 'work', 'cowork', 'co-work', 'zoom', 'meeting', 'laptop', 'workspace', 'desk'], topics: ['wifi', 'work_environment', 'check_in', 'noise'] },
+  { keywords: ['family', 'kids', 'children', 'child', 'baby', 'toddler', 'teen', 'parent', 'caregiver'], topics: ['cleanliness', 'extra_bed_policy', 'crib_setup', 'breakfast', 'noise', 'pool', 'check_in'] },
+  { keywords: ['pet', 'dog', 'cat', 'service animal', 'guide dog'], topics: ['pet_policy', 'pet_fees', 'pet_restrictions'] },
+  { keywords: ['wheelchair', 'mobility', 'accessible', 'accessibility', 'step-free', 'elevator', 'lift', 'bathroom'], topics: ['accessibility', 'elevator_access', 'bathroom_accessibility', 'check_in'] },
+  { keywords: ['quiet', 'sleep', 'light sleeper', 'rest', 'sensory', 'neurodivergent', 'fragrance', 'air quality'], topics: ['noise', 'air_conditioning', 'room_comfort', 'cleanliness'] },
+  { keywords: ['clean', 'cleanliness', 'hygiene', 'allergy', 'illness'], topics: ['cleanliness', 'room_comfort', 'safety'] },
+  { keywords: ['safe', 'safety', 'secure', 'security'], topics: ['safety', 'check_in'] },
+  { keywords: ['breakfast', 'food', 'dining', 'dietary', 'restaurant'], topics: ['breakfast', 'breakfast_quality'] },
+  { keywords: ['parking', 'car', 'garage', 'road trip'], topics: ['parking', 'check_in'] },
+  { keywords: ['walkable', 'transit', 'metro', 'subway', 'train', 'bus', 'location'], topics: ['transit', 'noise'] },
+  { keywords: ['pool', 'swim', 'hot tub'], topics: ['pool'] },
+  { keywords: ['gym', 'fitness', 'workout', 'spa', 'wellness'], topics: ['gym', 'pool', 'room_comfort'] },
+  { keywords: ['temperature', 'ac', 'air conditioning', 'cooling', 'hvac'], topics: ['air_conditioning', 'room_comfort'] },
+  { keywords: ['spacious', 'comfort', 'bed', 'mattress', 'pillow'], topics: ['room_comfort', 'cleanliness'] },
+];
+
+function buildCustomTagClassificationSystemPrompt(): string {
+  return `You classify custom hotel-traveler persona tags into existing PARC persona types and follow-up topics.
+
+Return valid JSON only.
+
+Rules:
+1. Work only from the literal custom tag text.
+2. Map each custom tag to the most relevant existing persona tags when the meaning is clear.
+3. Also map each custom tag to the most relevant follow-up topics.
+4. Be conservative. If the meaning is vague, return fewer matches.
+5. Do not invent new persona tags or new topics.
+
+Allowed persona tags:
+${Object.keys(PERSONA_TOPIC_BUNDLES).join(', ')}
+
+Allowed follow-up topics:
+${Object.keys(TOPIC_DEFINITIONS).join(', ')}
+
+Return this shape:
+{
+  "items": [
+    {
+      "tag": "string",
+      "inferred_persona_tags": ["string"],
+      "inferred_topics": ["string"]
+    }
+  ]
+}`;
+}
+
 /**
  * Decision-risk weight per attribute (1–10).
  * Higher = more likely to affect booking decisions or cause unpleasant surprises.
@@ -400,7 +453,10 @@ Rules:
 6. For Slider questions, primary_text must be a direct question.
 7. For Agreement questions, primary_text must be a short statement suitable for a Yes / Neutral / No response.
 8. narrowing_text should only be present for negative_narrowing items, and it must stay on the same topic as the negative experience.
-9. Do not add markdown, numbering, or explanations.
+9. Ask about hotel facts, availability, consistency, clarity, quality, timing, or process. Do not center the wording on the user's feelings.
+10. Avoid emotional or self-focused phrasing such as "were you disappointed", "did this impact your satisfaction", "how did that make you feel", or "were you upset".
+11. Prefer wording like "Was breakfast available each morning?", "Did breakfast seem included in the rate?", "Were breakfast options clearly communicated?", or "Was the WiFi stable enough for calls?".
+12. Do not add markdown, numbering, or explanations.
 
 Return this shape:
 {
@@ -971,18 +1027,171 @@ function getTopicDefinition(topic: string): TopicDefinition {
   };
 }
 
-function getPersonaTopicCounts(userTags: string[]): Map<string, number> {
+function normalisePersonaTag(tag: string): string {
+  return tag.trim().toLowerCase();
+}
+
+function getPresetPersonaTag(tag: string): string | null {
+  const normalised = normalisePersonaTag(tag);
+  return Object.keys(PERSONA_TOPIC_BUNDLES).find(
+    candidate => normalisePersonaTag(candidate) === normalised,
+  ) ?? null;
+}
+
+function getPresetTopicsForTag(tag: string): string[] {
+  const exactKey = getPresetPersonaTag(tag);
+
+  return exactKey ? PERSONA_TOPIC_BUNDLES[exactKey] ?? [] : [];
+}
+
+function inferTopicsFromCustomTagHeuristics(tag: string): string[] {
+  const lower = normalisePersonaTag(tag);
+  if (!lower) return [];
+
+  const matchedTopics = new Set<string>();
+
+  for (const [topic, definition] of Object.entries(TOPIC_DEFINITIONS)) {
+    const directTerms = new Set<string>([
+      topic,
+      topic.replace(/_/g, ' '),
+      getAttributeLabel(topic).toLowerCase(),
+      ...definition.review_keywords,
+      ...(definition.hotel_amenities ?? []).map(item => item.replace(/_/g, ' ')),
+    ]);
+
+    for (const term of directTerms) {
+      const candidate = term.trim().toLowerCase();
+      if (!candidate) continue;
+      if (lower.includes(candidate) || candidate.includes(lower)) {
+        matchedTopics.add(topic);
+        break;
+      }
+    }
+  }
+
+  for (const hint of CUSTOM_TAG_TOPIC_HINTS) {
+    if (hint.keywords.some(keyword => lower.includes(keyword))) {
+      for (const topic of hint.topics) {
+        matchedTopics.add(topic);
+      }
+    }
+  }
+
+  return Array.from(matchedTopics);
+}
+
+function mergeUniqueStrings(...groups: string[][]): string[] {
+  return Array.from(new Set(groups.flat().filter(Boolean)));
+}
+
+function parseCustomTagInterpretation(item: unknown): CustomTagInterpretation | null {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+
+  const candidate = item as Record<string, unknown>;
+  if (typeof candidate.tag !== 'string') {
+    return null;
+  }
+
+  const inferredPersonaTags = Array.isArray(candidate.inferred_persona_tags)
+    ? candidate.inferred_persona_tags.filter(
+        (value): value is string => typeof value === 'string' && Boolean(getPresetPersonaTag(value)),
+      )
+    : [];
+  const inferredTopics = Array.isArray(candidate.inferred_topics)
+    ? candidate.inferred_topics.filter(
+        (value): value is string => typeof value === 'string' && value in TOPIC_DEFINITIONS,
+      )
+    : [];
+
+  return {
+    tag: candidate.tag,
+    inferred_persona_tags: inferredPersonaTags,
+    inferred_topics: inferredTopics,
+  };
+}
+
+async function classifyCustomTags(
+  customTags: string[],
+): Promise<Map<string, CustomTagInterpretation>> {
+  if (customTags.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      response_format: { type: 'json_object' },
+      temperature: 0,
+      max_tokens: 500,
+      messages: [
+        { role: 'system', content: buildCustomTagClassificationSystemPrompt() },
+        {
+          role: 'user',
+          content: JSON.stringify({ tags: customTags }),
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return new Map();
+    }
+
+    const parsed = JSON.parse(content) as { items?: unknown[] };
+    const map = new Map<string, CustomTagInterpretation>();
+    for (const rawItem of parsed.items ?? []) {
+      const interpretation = parseCustomTagInterpretation(rawItem);
+      if (!interpretation) continue;
+      map.set(normalisePersonaTag(interpretation.tag), interpretation);
+    }
+    return map;
+  } catch (error) {
+    console.warn('[follow-up] custom tag classification failed:', error);
+    return new Map();
+  }
+}
+
+function getTopicsForPersonaTag(
+  tag: string,
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): string[] {
+  const presetTopics = getPresetTopicsForTag(tag);
+  if (presetTopics.length > 0) {
+    return presetTopics;
+  }
+
+  const customInterpretation = customTagInterpretations.get(normalisePersonaTag(tag));
+  const inferredTopicsFromTypes = (customInterpretation?.inferred_persona_tags ?? [])
+    .flatMap(inferredTag => getPresetTopicsForTag(inferredTag));
+
+  return mergeUniqueStrings(
+    customInterpretation?.inferred_topics ?? [],
+    inferredTopicsFromTypes,
+    inferTopicsFromCustomTagHeuristics(tag),
+  );
+}
+
+function getPersonaTopicCounts(
+  userTags: string[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): Map<string, number> {
   const counts = new Map<string, number>();
   for (const tag of userTags) {
-    for (const topic of PERSONA_TOPIC_BUNDLES[tag] ?? []) {
+    for (const topic of getTopicsForPersonaTag(tag, customTagInterpretations)) {
       counts.set(topic, (counts.get(topic) ?? 0) + 1);
     }
   }
   return counts;
 }
 
-function getMatchingPersonaTagsForTopic(topic: string, userTags: string[]): string[] {
-  return userTags.filter(tag => (PERSONA_TOPIC_BUNDLES[tag] ?? []).includes(topic));
+function getMatchingPersonaTagsForTopic(
+  topic: string,
+  userTags: string[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): string[] {
+  return userTags.filter(tag => getTopicsForPersonaTag(tag, customTagInterpretations).includes(topic));
 }
 
 function getHotelFieldItems(hotel: Hotel, field: keyof Hotel): string[] {
@@ -1224,8 +1433,12 @@ function buildEvidenceText(hotel: Hotel, reviews: Review[], attribute: string, g
   );
 }
 
-function attributeMattersToUser(attribute: string, userTags: string[]): boolean {
-  return getMatchingPersonaTagsForTopic(attribute, userTags).length > 0;
+function attributeMattersToUser(
+  attribute: string,
+  userTags: string[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): boolean {
+  return getMatchingPersonaTagsForTopic(attribute, userTags, customTagInterpretations).length > 0;
 }
 
 function buildAttributeContextSignal(
@@ -1234,10 +1447,11 @@ function buildAttributeContextSignal(
   attribute: string,
   userTags: string[],
   gap?: AttributeGap,
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
 ): AttributeContextSignal {
   const review_evidence = collectReviewEvidence(reviews, attribute);
   const has_hotel_claim = Boolean(findHotelClaimSentence(hotel, attribute, gap)) || hasStructuredHotelClaim(hotel, attribute, gap);
-  const matters_to_user = attributeMattersToUser(attribute, userTags);
+  const matters_to_user = attributeMattersToUser(attribute, userTags, customTagInterpretations);
 
   let grounding_score = 0;
   let priority_multiplier = 1;
@@ -1279,8 +1493,12 @@ function buildAttributeContextSignal(
   };
 }
 
-function getPersonaReasonFragment(attribute: string, userTags: string[]): string {
-  const matches = getMatchingPersonaTagsForTopic(attribute, userTags);
+function getPersonaReasonFragment(
+  attribute: string,
+  userTags: string[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): string {
+  const matches = getMatchingPersonaTagsForTopic(attribute, userTags, customTagInterpretations);
   if (matches.length === 0) {
     return 'your travel priorities';
   }
@@ -1298,20 +1516,21 @@ function buildQuestionReason(
   userTags: string[],
   variant: 'main' | 'narrowing' = 'main',
   topicSource: TopicSource = 'persona_only',
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
 ): string {
   if (variant === 'narrowing') {
     if (topicSource === 'intersection' || topicSource === 'review_only') {
       return `You raised possible ${getAttributeLabel(attribute)} friction in your review, so this follow-up narrows down what future guests should know.`;
     }
 
-    return `This follow-up narrows down how ${getAttributeLabel(attribute)} affects travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
+    return `This follow-up narrows down how ${getAttributeLabel(attribute)} affects travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)}.`;
   }
 
   if (topicSource === 'intersection') {
     const freshnessNote = gap?.decay_days
       ? ` Recent reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`
       : '';
-    return `You mentioned ${getAttributeLabel(attribute)} and your profile suggests ${getPersonaReasonFragment(attribute, userTags)}, so a fresh signal here helps similar guests.${freshnessNote}`;
+    return `You mentioned ${getAttributeLabel(attribute)} and your profile suggests ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)}, so a fresh signal here helps similar guests.${freshnessNote}`;
   }
 
   if (topicSource === 'review_only') {
@@ -1322,23 +1541,23 @@ function buildQuestionReason(
   }
 
   if (topicSource === 'blind_spot') {
-    return `Travelers with ${getPersonaReasonFragment(attribute, userTags)} often care about ${getAttributeLabel(attribute)}, but the hotel's listing has not been well confirmed by recent reviews.`;
+    return `Travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)} often care about ${getAttributeLabel(attribute)}, but the hotel's listing has not been well confirmed by recent reviews.`;
   }
 
   if (gap?.source === 'both' && gap.decay_days && gap.amenity_claimed) {
-    return `Travelers with ${getPersonaReasonFragment(attribute, userTags)} often care about ${getAttributeLabel(attribute)}, and the hotel advertises it without a fresh review signal in ${summariseDuration(gap.decay_days)}.`;
+    return `Travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)} often care about ${getAttributeLabel(attribute)}, and the hotel advertises it without a fresh review signal in ${summariseDuration(gap.decay_days)}.`;
   }
 
   if (gap?.source === 'decay' && gap.decay_days) {
-    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)} and reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`;
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)} and reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`;
   }
 
   if (gap?.source !== 'decay' && gap?.amenity_claimed) {
-    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)}.`;
   }
 
-  if (attributeMattersToUser(attribute, userTags)) {
-    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
+  if (attributeMattersToUser(attribute, userTags, customTagInterpretations)) {
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags, customTagInterpretations)}.`;
   }
 
   return 'This detail still has a thin review signal, so your input helps future guests make a better call.';
@@ -1366,11 +1585,16 @@ function computeFreshness(lastActiveAt: Date | null, attribute: string, today: D
  * staleness = 1 − freshness  (0 = fresh, 1 = fully stale)
  * persona_multiplier ≥ 1.0 (boosted when attribute matches reviewer's tags)
  */
-function computePriorityScore(attribute: string, freshness: number, userTags: string[]): number {
+function computePriorityScore(
+  attribute: string,
+  freshness: number,
+  userTags: string[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
+): number {
   const riskWeight = RISK_WEIGHTS[attribute] ?? 1;
   const staleness = 1 - freshness;
   const personaMultiplier = userTags.reduce((acc, tag) => {
-    return acc + ((PERSONA_TOPIC_BUNDLES[tag] ?? []).includes(attribute) ? 0.3 : 0);
+    return acc + (getTopicsForPersonaTag(tag, customTagInterpretations).includes(attribute) ? 0.3 : 0);
   }, 1.0);
   return riskWeight * staleness * personaMultiplier;
 }
@@ -1645,6 +1869,7 @@ function buildRankedGaps(
   userTags: string[],
   hotel: Hotel,
   mergedReviews: Review[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
 ): AttributeGap[] {
   const gapMap = new Map<string, AttributeGap>();
   const contextSignals = new Map<string, AttributeContextSignal>();
@@ -1652,7 +1877,7 @@ function buildRankedGaps(
   const getContextSignal = (attribute: string, gap?: AttributeGap): AttributeContextSignal => {
     const existing = contextSignals.get(attribute);
     if (existing) return existing;
-    const signal = buildAttributeContextSignal(hotel, mergedReviews, attribute, userTags, gap);
+    const signal = buildAttributeContextSignal(hotel, mergedReviews, attribute, userTags, gap, customTagInterpretations);
     contextSignals.set(attribute, signal);
     return signal;
   };
@@ -1664,7 +1889,7 @@ function buildRankedGaps(
 
     const freshness = computeFreshness(lastActive, attribute, today);
     const contextSignal = getContextSignal(attribute);
-    const priority = computePriorityScore(attribute, freshness, userTags) * contextSignal.priority_multiplier;
+    const priority = computePriorityScore(attribute, freshness, userTags, customTagInterpretations) * contextSignal.priority_multiplier;
 
     // Minimum threshold: freshness must be below 0.95 (at least slightly stale)
     if (freshness >= 0.95) continue;
@@ -2020,9 +2245,10 @@ function buildCandidateTopics(
   hotel: Hotel,
   mergedReviews: Review[],
   rankedGaps: AttributeGap[],
+  customTagInterpretations: Map<string, CustomTagInterpretation> = new Map(),
 ): CandidateTopic[] {
   const reviewMentionMap = new Map(mentions.map(mention => [mention.attribute, mention]));
-  const personaTopicCounts = getPersonaTopicCounts(userTags);
+  const personaTopicCounts = getPersonaTopicCounts(userTags, customTagInterpretations);
   const rankedGapMap = new Map(rankedGaps.map(gap => [gap.attribute, gap]));
   const candidateKeys = new Set<string>([
     ...reviewMentionMap.keys(),
@@ -2056,7 +2282,7 @@ function buildCandidateTopics(
         }
       : undefined;
     const gap = existingGap ?? syntheticGap;
-    const contextSignal = buildAttributeContextSignal(hotel, mergedReviews, topic, userTags, gap);
+    const contextSignal = buildAttributeContextSignal(hotel, mergedReviews, topic, userTags, gap, customTagInterpretations);
 
     const eligible = Boolean(reviewMention)
       || (personaMatchCount > 0 && (hotelSupport || reviewEvidence.mention_count > 0 || blindSpot));
@@ -2229,7 +2455,23 @@ function sanitizeDynamicQuestionText(text: string | null | undefined): string | 
     || (trimmed.startsWith("'") && trimmed.endsWith("'"))
       ? trimmed.slice(1, -1).trim()
       : trimmed;
-  return unwrapped.length > 220 ? `${unwrapped.slice(0, 217).trimEnd()}...` : unwrapped;
+  const sanitized = unwrapped.length > 220 ? `${unwrapped.slice(0, 217).trimEnd()}...` : unwrapped;
+  const lower = sanitized.toLowerCase();
+  const bannedPhrases = [
+    'were you disappointed',
+    'did the lack of',
+    'impact your overall satisfaction',
+    'affect your overall satisfaction',
+    'how did that make you feel',
+    'were you upset',
+    'did this disappoint you',
+  ];
+
+  if (bannedPhrases.some(phrase => lower.includes(phrase))) {
+    return null;
+  }
+
+  return sanitized;
 }
 
 function parseGeneratedQuestionCopy(item: unknown): GeneratedQuestionCopy | null {
@@ -2359,6 +2601,8 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
   const hotel = hotelData as Hotel;
   const currentReview = currentReviewData as ReviewSubmissionRow;
   const userTags = ((personaData as UserPersona | null)?.tags ?? []);
+  const customTags = userTags.filter(tag => !getPresetPersonaTag(tag));
+  const customTagInterpretations = await classifyCustomTags(customTags);
   const historicReviews = (historicReviewsData ?? []) as Review[];
   const submissionReviews = ((submissionReviewsData ?? []) as ReviewSubmissionRow[]).map(mapSubmissionToReview);
   const mergedReviews = [...submissionReviews, ...historicReviews];
@@ -2372,12 +2616,21 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
   const freshnessMap = await loadOrBackfillFreshness(supabase, property_id, mergedReviews, today);
 
   // Step C: Build ranked gap list (Layers 1–4).
-  const rankedGaps = buildRankedGaps(freshnessMap, today, userTags, hotel, mergedReviews);
+  const rankedGaps = buildRankedGaps(freshnessMap, today, userTags, hotel, mergedReviews, customTagInterpretations);
 
   // Step D: Generate questions based on review sentiment.
   const reviewSentiment = detectReviewSentiment(currentReview);
   const mentions = detectAttributeMentions(reviewText);
-  const candidateTopics = buildCandidateTopics(mentions, freshnessMap, today, userTags, hotel, mergedReviews, rankedGaps);
+  const candidateTopics = buildCandidateTopics(
+    mentions,
+    freshnessMap,
+    today,
+    userTags,
+    hotel,
+    mergedReviews,
+    rankedGaps,
+    customTagInterpretations,
+  );
 
   if (candidateTopics.length === 0) {
     return {
@@ -2406,7 +2659,7 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
           user_tags: userTags,
           submitted_review: reviewText,
           evidence_text: buildEvidenceText(hotel, mergedReviews, candidate.attribute, candidate.gap),
-          reason: buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source),
+          reason: buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source, customTagInterpretations),
           review_mentions: candidate.review_mentions,
           review_negative_mentions: candidate.review_negative_mentions,
         })),
@@ -2414,7 +2667,7 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
 
       questions = positiveCandidates.map(candidate => {
         const evidenceText = buildEvidenceText(hotel, mergedReviews, candidate.attribute, candidate.gap);
-        const reasonText = buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source);
+        const reasonText = buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source, customTagInterpretations);
         const context = {
           evidence_text: evidenceText,
           reason: reasonText,
@@ -2428,8 +2681,8 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
     if (selectedCandidate) {
       selectedAttribute = selectedCandidate.attribute;
       const evidenceText = buildEvidenceText(hotel, mergedReviews, selectedCandidate.attribute, selectedCandidate.gap);
-      const mainReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'main', selectedCandidate.topic_source);
-      const narrowingReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'narrowing', selectedCandidate.topic_source);
+      const mainReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'main', selectedCandidate.topic_source, customTagInterpretations);
+      const narrowingReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'narrowing', selectedCandidate.topic_source, customTagInterpretations);
       const shouldAskNarrowingQuestion = selectedCandidate.review_negative_mentions > 0
         || selectedCandidate.review_mentions > 1
         || selectedCandidate.topic_source === 'intersection';

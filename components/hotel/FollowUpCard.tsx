@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, MessageSquareText, Mic, MicOff, Plus, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -155,10 +155,12 @@ function SemanticSlider({
   question,
   value,
   onChange,
+  assistAction,
 }: {
   question: SemanticSliderQuestion;
   value: number | null;
   onChange: (value: number) => void;
+  assistAction?: ReactNode;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
@@ -235,11 +237,14 @@ function SemanticSlider({
         />
       </div>
 
-      <div className="rounded-full bg-slate-50 px-4 py-3 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected</p>
-        <p className="mt-1 text-sm font-semibold text-slate-700">
-          {getSliderSummary(question, value) ?? 'Slide to respond'}
-        </p>
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1 rounded-full bg-slate-50 px-4 py-3 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">Selected</p>
+          <p className="mt-1 text-sm font-semibold text-slate-700">
+            {getSliderSummary(question, value) ?? 'Slide to respond'}
+          </p>
+        </div>
+        {assistAction ? <div className="shrink-0">{assistAction}</div> : null}
       </div>
     </div>
   );
@@ -473,9 +478,6 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
     });
 
     setManualSelectionForStep(step, true);
-    scheduleAdvance(answers.map((item, index) => (
-      index === step ? { ...item, quantitative_value: value } : item
-    )));
   }
 
   function handleQuickTagToggle(option: string) {
@@ -640,30 +642,28 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                 {current.ui_type === 'Slider'
-                  ? 'Slide once to continue'
+                  ? 'Slide to answer, then continue'
                   : current.ui_type === 'Agreement'
                   ? 'Tap once to continue'
                   : 'Select all that apply'}
               </p>
 
               {current.ui_type === 'Slider' ? (
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <SemanticSlider
-                      question={current}
-                      value={answer.quantitative_value}
-                      onChange={handleSliderChange}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleToggleAssistMenu}
-                    className="mt-7 inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition-colors hover:border-[#0071c2] hover:text-[#0071c2]"
-                    aria-label="More answer options"
-                  >
-                    <Plus size={18} />
-                  </button>
-                </div>
+                <SemanticSlider
+                  question={current}
+                  value={answer.quantitative_value}
+                  onChange={handleSliderChange}
+                  assistAction={(
+                    <button
+                      type="button"
+                      onClick={handleToggleAssistMenu}
+                      className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 transition-colors hover:border-[#0071c2] hover:text-[#0071c2]"
+                      aria-label="More answer options"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  )}
+                />
               ) : null}
 
               {current.ui_type === 'Agreement' ? (
