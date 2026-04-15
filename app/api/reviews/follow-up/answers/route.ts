@@ -95,8 +95,7 @@ export async function POST(request: NextRequest) {
 
     const property_id = (reviewRow as { eg_property_id: string } | null)?.eg_property_id;
     if (property_id) {
-      const featureNames = answers.map(a => a.feature_name);
-      await updateFreshnessFromAnswer(supabase, property_id, featureNames, new Date());
+      await updateFreshnessFromAnswer(supabase, property_id, answers, new Date());
     }
 
     return Response.json({ ok: true, inserted: rows.length });

@@ -34,6 +34,7 @@ import { createServerClient } from '@/lib/supabase';
 import { AMENITY_LABELS, parseArrayField, stripHtml } from '@/lib/utils';
 import type {
   AgreementQuestion,
+  FollowUpAnswer,
   FollowUpEngineResponse,
   FollowUpQuestion,
   Hotel,
@@ -886,30 +887,88 @@ async function updateFreshnessFromReview(
 }
 
 /**
+ * Normalise a follow-up answer's quantitative value to a 0.0–5.0 quality score.
+ *
+ * Slider  → quantitative_value ∈ [0,1]; multiply by 5 → 0.0–5.0
+ *           (left pole = worst, right pole = best)
+ * Agreement → quantitative_value ∈ [1,5]; linear scale → 0.0–5.0
+ *           ((v-1)/4 × 5)
+ * QuickTag → no numeric meaning; returns null (excluded from scoring)
+ */
+function normaliseAnswerToScore(answer: FollowUpAnswer): number | null {
+  if (answer.quantitative_value === null) return null;
+  if (answer.ui_type === 'Slider') {
+    return Math.round(answer.quantitative_value * 50) / 10;
+  }
+  if (answer.ui_type === 'Agreement') {
+    return Math.round(((answer.quantitative_value - 1) / 4) * 50) / 10;
+  }
+  // QuickTag has no numeric value
+  return null;
+}
+
+/**
  * Exported: called by the answers route after saving FollowUp_Answers rows.
- * Updates last_confirmed_at so the engine knows the attribute was actively confirmed.
+ * Updates last_confirmed_at AND computes an EMA quality score (avg_score 0–5)
+ * for each answered attribute.
+ *
+ * EMA formula: new_avg = old_avg × 0.6 + new_score × 0.4
+ * This weights recent answers at 40% so a single outlier doesn't dominate.
+ * QuickTag answers update freshness timestamps but do not affect avg_score.
  */
 export async function updateFreshnessFromAnswer(
   supabase: SupabaseClient,
   property_id: string,
-  featureNames: string[],
+  answers: FollowUpAnswer[],
   confirmedAt: Date,
 ): Promise<void> {
-  if (featureNames.length === 0) return;
+  if (answers.length === 0) return;
 
-  const rows = featureNames.map(attribute => ({
-    eg_property_id: property_id,
-    attribute,
-    last_confirmed_at: confirmedAt.toISOString(),
-    updated_at: confirmedAt.toISOString(),
-    mention_count: 0,
-  }));
+  // 1. Fetch current avg_score + score_count for the affected attributes.
+  const attributes = answers.map(a => a.feature_name);
+  const { data: existing } = await supabase
+    .from('property_attribute_freshness')
+    .select('attribute, avg_score, score_count')
+    .eq('eg_property_id', property_id)
+    .in('attribute', attributes);
+
+  const existingMap = new Map(
+    ((existing ?? []) as { attribute: string; avg_score: number | null; score_count: number }[])
+      .map(r => [r.attribute, r]),
+  );
+
+  // 2. Compute new EMA score per answer and build upsert rows.
+  const rows = answers.map(answer => {
+    const newScore = normaliseAnswerToScore(answer);
+    const prev = existingMap.get(answer.feature_name);
+    const oldAvg = prev?.avg_score ?? null;
+    const oldCount = prev?.score_count ?? 0;
+
+    const newAvg =
+      newScore === null
+        ? oldAvg                                                        // QuickTag: no change
+        : oldAvg === null
+          ? newScore                                                     // first score ever
+          : Math.round((oldAvg * 0.6 + newScore * 0.4) * 10) / 10;    // EMA
+
+    const newCount = newScore !== null ? oldCount + 1 : oldCount;
+
+    return {
+      eg_property_id:   property_id,
+      attribute:        answer.feature_name,
+      last_confirmed_at: confirmedAt.toISOString(),
+      updated_at:       confirmedAt.toISOString(),
+      avg_score:        newAvg,
+      score_count:      newCount,
+      mention_count:    0,
+    };
+  });
 
   await supabase
     .from('property_attribute_freshness')
     .upsert(rows, { onConflict: 'eg_property_id,attribute' })
     .then(({ error }) => {
-      if (error) console.warn('[follow-up] confirmed_at update failed:', error.message);
+      if (error) console.warn('[follow-up] answer freshness update failed:', error.message);
     });
 }
 
@@ -1138,6 +1197,42 @@ function pickReasonStatement(
   return candidates.find(c => containsAny(lower, c.keywords))?.statement ?? fallback;
 }
 
+/**
+ * Persona × attribute → QuickTag override config.
+ * When the reviewer's persona tag matches a key here, they receive a tailored
+ * QuickTag question instead of the generic Slider or Agreement.
+ *
+ * Key format: `${personaTag}:${attribute}`
+ */
+const PERSONA_QUICKTAG_OVERRIDES: Record<string, { prompt: string; options: string[] }> = {
+  // Quiet / sensory-sensitive users → precise noise source identification
+  'Quiet:noise':             { prompt: 'What was the main noise source?', options: ['Street / traffic', 'Hallway / neighbors', 'AC or heating', 'Construction nearby', 'It was quiet'] },
+  'Light sleeper:noise':     { prompt: 'What was the main noise source?', options: ['Street / traffic', 'Hallway / neighbors', 'AC or heating', 'Construction nearby', 'It was quiet'] },
+  'Neurodivergent:noise':    { prompt: 'Which sensory issues affected your stay?', options: ['Noise', 'Harsh lighting', 'Strong smells', 'Crowded spaces', 'None — it was fine'] },
+  'Sensory-sensitive:noise': { prompt: 'Which sensory issues affected your stay?', options: ['Noise', 'Harsh lighting', 'Strong smells', 'Crowded spaces', 'None — it was fine'] },
+
+  // Family / kids → breakfast-specific options
+  'Family traveler:breakfast':             { prompt: 'How was breakfast for the family?', options: ['Great variety for kids', 'Limited kid options', 'Crowded / long wait', 'Good healthy options', 'Not worth it'] },
+  'Traveling with kids:breakfast':         { prompt: 'How was breakfast for the family?', options: ['Great variety for kids', 'Limited kid options', 'Crowded / long wait', 'Good healthy options', 'Not worth it'] },
+  'Traveling with baby/toddler:breakfast': { prompt: 'Could you find suitable food for your baby/toddler?', options: ['Yes, easily', 'Limited options', 'Had to ask staff', 'Not really', "Didn't use breakfast"] },
+
+  // Pet owners → pet experience options
+  'Pet owner:pet_policy':       { prompt: 'How was the pet experience?', options: ['Very welcoming', 'Allowed but unwelcoming', 'Extra fees were high', 'Strict restrictions', 'Staff were unhelpful'] },
+  'Guide dog owner:pet_policy': { prompt: 'Was the hotel accommodating for your guide dog?', options: ['Very accommodating', 'Acceptable', 'Some friction', 'Not accommodating', 'Had to explain my rights'] },
+
+  // Dietary / food-focused travelers
+  'Dietary restrictions:breakfast': { prompt: 'Were your dietary needs met at breakfast?', options: ['Yes, fully', 'Partially', 'Had to ask staff', 'Barely', 'Not at all'] },
+  'Foodie:breakfast_quality':       { prompt: 'How would you rate the food quality?', options: ['Exceptional', 'Good', 'Average', 'Disappointing', 'Terrible'] },
+
+  // Accessibility users → specific friction points
+  'Wheelchair user:accessibility':   { prompt: 'Which accessibility features worked well?', options: ['Ramp / step-free entry', 'Elevator', 'Accessible bathroom', 'Wide corridors', 'Staff assistance'] },
+  'Mobility aid user:accessibility': { prompt: 'Which accessibility features worked well?', options: ['Ramp / step-free entry', 'Elevator', 'Accessible bathroom', 'Wide corridors', 'Staff assistance'] },
+
+  // Parking-focused travelers
+  'Road tripper:parking':   { prompt: 'How was the parking experience?', options: ['Easy and free', 'Easy but paid', 'Hard to find', 'Full / unavailable', 'Instructions unclear'] },
+  'Parking needed:parking': { prompt: 'How was the parking experience?', options: ['Easy and free', 'Easy but paid', 'Hard to find', 'Full / unavailable', 'Instructions unclear'] },
+};
+
 function buildPrimaryQuestion(
   attribute: string,
   userTags: string[],
@@ -1145,10 +1240,26 @@ function buildPrimaryQuestion(
   context: QuestionContext,
   gap?: AttributeGap,
 ): FollowUpQuestion {
+  // Layer B: Check persona × attribute QuickTag override first.
+  for (const tag of userTags) {
+    const override = PERSONA_QUICKTAG_OVERRIDES[`${tag}:${attribute}`];
+    if (override) {
+      return {
+        ui_type:       'QuickTag',
+        feature_name:  attribute,
+        prompt:        override.prompt,
+        options:       override.options,
+        evidence_text: context.evidence_text,
+        reason:        context.reason,
+      };
+    }
+  }
+
+  // Default: Slider (if configured) → Agreement
   const slider = SLIDER_CONFIG[attribute];
   if (slider) {
     return {
-      ui_type: 'Slider',
+      ui_type:      'Slider',
       feature_name: attribute,
       evidence_text: context.evidence_text,
       reason: context.reason,
