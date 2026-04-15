@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="270" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#243B71"/>
+      <stop offset=".55" stop-color="#7557A3"/>
+      <stop offset="1" stop-color="#F28B6B"/>
+    </linearGradient>
+    <linearGradient id="water" x1="600" y1="250" x2="600" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B5677"/>
+      <stop offset="1" stop-color="#0A2740"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="480" fill="url(#sky)"/>
+  <rect y="254" width="1200" height="226" fill="url(#water)"/>
+  <g fill="#19284E">
+    <rect x="120" y="112" width="56" height="164"/>
+    <rect x="188" y="88" width="74" height="188"/>
+    <rect x="278" y="136" width="52" height="140"/>
+    <rect x="344" y="60" width="88" height="216"/>
+    <rect x="446" y="122" width="70" height="154"/>
+    <rect x="532" y="92" width="98" height="184"/>
+    <rect x="646" y="142" width="60" height="134"/>
+    <rect x="720" y="78" width="82" height="198"/>
+    <rect x="816" y="130" width="62" height="146"/>
+    <rect x="892" y="98" width="92" height="178"/>
+  </g>
+  <g fill="#7ED1E6" opacity=".85">
+    <rect x="0" y="302" width="1200" height="88"/>
+    <rect x="166" y="314" width="388" height="54" rx="20"/>
+  </g>
+  <rect x="0" y="392" width="1200" height="88" fill="#E4B585"/>
+  <rect x="56" y="404" width="300" height="16" rx="8" fill="#7F5A3F"/>
+  <rect x="382" y="404" width="170" height="16" rx="8" fill="#7F5A3F"/>
+  <circle cx="930" cy="108" r="30" fill="#FFD3A6" opacity=".7"/>
+</svg>

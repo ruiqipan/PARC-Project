@@ -1,8 +1,10 @@
 'use client';
 
 import { startTransition, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { getHotelVisual } from '@/lib/hotel-visuals';
 import { Hotel, Review } from '@/types';
 import ReviewFeed from '@/components/hotel/ReviewFeed';
 import ReviewInput from '@/components/hotel/ReviewInput';
@@ -54,6 +56,10 @@ function ratingColor(r: number) {
   return 'bg-orange-500';
 }
 
+function displaySourceUrl(sourceUrl: string) {
+  return sourceUrl.replace(/^https?:\/\//, '');
+}
+
 type Tab = 'overview' | 'amenities' | 'policies' | 'reviews';
 
 export default function HotelDetailClient({
@@ -71,6 +77,9 @@ export default function HotelDetailClient({
   const starRating = hotel.star_rating ? parseFloat(String(hotel.star_rating)) : null;
   const rating = hotel.guestrating_avg_expedia;
   const popularAmenities = hotel.popular_amenities_list || [];
+  const visual = getHotelVisual(hotel);
+  const [useFallbackHero, setUseFallbackHero] = useState(false);
+  const heroSrc = useFallbackHero ? visual.fallbackSrc : visual.src;
 
   const checkOutPolicyItems = parseHtmlItems(hotel.check_out_policy);
   const petPolicyItems = parseHtmlItems(hotel.pet_policy);
@@ -89,40 +98,78 @@ export default function HotelDetailClient({
     <div className="bg-gray-50 min-h-screen">
 
       {/* Hero header */}
-      <div className="bg-gradient-to-br from-[#003580] to-[#0071c2] text-white">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+      <div className="relative isolate overflow-hidden bg-[#003580] text-white">
+        <div className="absolute inset-0">
+          <Image
+            src={heroSrc}
+            alt={`${city || 'Property'} scene`}
+            fill
+            unoptimized
+            priority
+            sizes="100vw"
+            className="object-cover object-center scale-[1.06]"
+            key={heroSrc}
+            onError={() => {
+              if (!useFallbackHero) {
+                setUseFallbackHero(true);
+              }
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-slate-950/20 to-[#003580]/84" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.18),_transparent_34%)]" />
+        </div>
+
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 lg:pt-14 pb-10 sm:pb-14 lg:pb-20 min-h-[420px] sm:min-h-[520px] lg:min-h-[620px] flex flex-col justify-end">
           {/* Breadcrumb */}
-          <nav className="text-blue-300 text-xs sm:text-sm mb-4 flex items-center gap-1.5">
+          <nav className="text-white/72 text-xs sm:text-sm mb-4 flex items-center gap-1.5">
             <Link href="/" className="hover:text-white transition-colors">Hotels</Link>
             <span>›</span>
             <span className="text-white">{city || 'Property'}</span>
           </nav>
 
-          <h1 className="text-2xl sm:text-3xl font-bold mb-1">{city || 'Property'}</h1>
-          {regionLine && <p className="text-blue-200 text-sm mb-5">{regionLine}</p>}
+          <div className="max-w-3xl">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-balance">
+              {city || 'Property'}
+            </h1>
+            {regionLine && <p className="mt-3 text-sm sm:text-base text-white/82">{regionLine}</p>}
+          </div>
 
-          {/* Stats row */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            {rating != null && rating > 0 && (
-              <div className="flex items-center gap-2.5 bg-white/10 rounded-xl px-3 py-2">
-                <span className={`${ratingColor(rating)} text-white font-bold text-base px-2.5 py-0.5 rounded-lg`}>
-                  {rating.toFixed(1)}
-                </span>
-                <div>
-                  <p className="font-semibold text-sm leading-tight">{ratingLabel(rating)}</p>
-                  <p className="text-blue-200 text-xs">{reviews.length.toLocaleString()} reviews</p>
-                </div>
+          <div className="mt-5 inline-flex max-w-full self-start rounded-[24px] border border-white/18 bg-white/12 text-white shadow-[0_20px_60px_rgba(7,33,68,0.22)] backdrop-blur-xl">
+            <div className="flex flex-col gap-3 p-3 sm:p-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+                {rating != null && rating > 0 && (
+                  <div className="flex items-center gap-2.5 rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-md">
+                    <span className={`${ratingColor(rating)} text-white font-bold text-base px-2.5 py-0.5 rounded-lg`}>
+                      {rating.toFixed(1)}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-sm leading-tight text-white">{ratingLabel(rating)}</p>
+                      <p className="text-white/70 text-xs">{reviews.length.toLocaleString()} reviews</p>
+                    </div>
+                  </div>
+                )}
+                {starRating != null && (
+                  <div className="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-md">
+                    <p className="text-amber-500 text-base leading-tight tracking-wide">
+                      {'★'.repeat(Math.round(starRating))}
+                      {'☆'.repeat(5 - Math.round(starRating))}
+                    </p>
+                    <p className="text-white/70 text-xs">{starRating}-star hotel</p>
+                  </div>
+                )}
               </div>
-            )}
-            {starRating != null && (
-              <div className="bg-white/10 rounded-xl px-3 py-2">
-                <p className="text-yellow-300 text-base leading-tight tracking-wide">
-                  {'★'.repeat(Math.round(starRating))}
-                  {'☆'.repeat(5 - Math.round(starRating))}
-                </p>
-                <p className="text-blue-200 text-xs">{starRating}-star hotel</p>
-              </div>
-            )}
+              {visual.sourceUrl && (
+                <a
+                  href={visual.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-fit max-w-full rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] leading-4 text-white/78 backdrop-blur-md transition hover:bg-white/16 break-all"
+                  title={visual.sourceUrl}
+                >
+                  Photo source: {displaySourceUrl(visual.sourceUrl)}
+                </a>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -130,7 +177,7 @@ export default function HotelDetailClient({
       {/* Popular amenities bar */}
       {popularAmenities.length > 0 && (
         <div className="bg-white border-b border-gray-200">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap gap-2">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap gap-2">
             {popularAmenities.map(key => (
               <span key={key} className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
                 {AMENITY_LABELS[key] || key.replace(/_/g, ' ')}
@@ -142,7 +189,7 @@ export default function HotelDetailClient({
 
       {/* Tabs */}
       <div className="bg-white border-b border-gray-200 sticky top-14 z-30">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex gap-0 overflow-x-auto scrollbar-none -mb-px">
             {tabs.map(tab => (
               <button
@@ -162,7 +209,7 @@ export default function HotelDetailClient({
       </div>
 
       {/* Tab content */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-7 sm:py-9">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-9">
 
         {/* ── Overview ── */}
         {activeTab === 'overview' && (

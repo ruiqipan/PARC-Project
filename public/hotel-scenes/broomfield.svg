@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8CC4FF"/>
+      <stop offset="1" stop-color="#F5E0B9"/>
+    </linearGradient>
+    <linearGradient id="meadow" x1="600" y1="300" x2="600" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7FAE6C"/>
+      <stop offset="1" stop-color="#5F8553"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="480" fill="url(#sky)"/>
+  <path d="M0 298L122 214L214 250L354 154L480 228L590 164L760 270L886 186L1042 262L1200 224V480H0V298Z" fill="#7D8E8F"/>
+  <path d="M0 326L150 260L280 300L420 194L566 256L702 214L858 308L1004 236L1200 300V480H0V326Z" fill="#9AA9A6"/>
+  <path d="M0 346H1200V480H0V346Z" fill="url(#meadow)"/>
+  <rect x="158" y="214" width="356" height="132" rx="12" fill="#CBB69C"/>
+  <rect x="190" y="182" width="300" height="44" rx="8" fill="#7A645A"/>
+  <rect x="208" y="244" width="52" height="60" fill="#7DA8C7"/>
+  <rect x="276" y="244" width="52" height="60" fill="#7DA8C7"/>
+  <rect x="344" y="244" width="52" height="60" fill="#7DA8C7"/>
+  <rect x="412" y="244" width="52" height="60" fill="#7DA8C7"/>
+  <rect x="670" y="324" width="250" height="14" rx="7" fill="#C2B8A0" opacity=".9"/>
+  <path d="M634 340C692 312 762 298 842 298C940 298 1020 316 1098 352V480H634V340Z" fill="#6E965F"/>
+</svg>

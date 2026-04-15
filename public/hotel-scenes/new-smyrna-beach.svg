@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
+  <defs>
+    <linearGradient id="ocean" x1="0" y1="80" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#49B9D9"/>
+      <stop offset="1" stop-color="#0A6A89"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="480" fill="#88D4E6"/>
+  <path d="M0 102C206 164 382 250 528 360C582 400 648 438 722 480H0V102Z" fill="url(#ocean)"/>
+  <path d="M314 0C436 66 560 148 690 252C760 308 844 382 942 480H730C648 436 584 398 532 356C384 246 210 160 0 96V0H314Z" fill="#F2D8A0"/>
+  <g fill="#F7F8FB">
+    <rect x="750" y="150" width="110" height="154" rx="10"/>
+    <rect x="878" y="134" width="128" height="170" rx="10"/>
+    <rect x="1026" y="164" width="98" height="140" rx="10"/>
+  </g>
+  <g fill="#9CD2E6">
+    <rect x="774" y="180" width="24" height="28"/>
+    <rect x="810" y="180" width="24" height="28"/>
+    <rect x="906" y="164" width="28" height="30"/>
+    <rect x="946" y="164" width="28" height="30"/>
+    <rect x="1060" y="190" width="26" height="30"/>
+  </g>
+  <path d="M716 322H1148V480H716V322Z" fill="#D9C497"/>
+  <g fill="#3F8A53">
+    <path d="M706 350L728 308L750 350H706Z"/>
+    <path d="M700 328C708 306 722 286 742 270C736 300 742 320 760 338L700 328Z"/>
+    <path d="M1120 354L1142 312L1164 354H1120Z"/>
+    <path d="M1112 334C1122 310 1138 292 1162 278C1154 304 1160 324 1180 342L1112 334Z"/>
+  </g>
+</svg>

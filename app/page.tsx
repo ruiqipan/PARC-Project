@@ -48,7 +48,7 @@ export default async function HotelListPage() {
       <div className="bg-[#003580]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
           <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">
-            Hotels &amp; Accommodations
+            Travel designed just for you
           </h1>
           <p className="text-blue-200 text-sm sm:text-base">
             {hotels.length} properties · Sorted by guest rating

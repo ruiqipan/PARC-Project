@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 480" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="600" y1="0" x2="600" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#97DBFF"/>
+      <stop offset="1" stop-color="#F4FFF6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="480" fill="#A2C794"/>
+  <rect width="1200" height="240" fill="url(#sky)"/>
+  <path d="M0 268L132 210L272 250L432 170L580 242L732 194L902 268L1076 206L1200 246V480H0V268Z" fill="#5E8B67"/>
+  <rect y="314" width="1200" height="166" fill="#79A162"/>
+  <rect x="452" y="202" width="206" height="116" rx="10" fill="#F1E6D4"/>
+  <rect x="402" y="216" width="52" height="102" rx="8" fill="#F6EBDA"/>
+  <rect x="656" y="216" width="52" height="102" rx="8" fill="#F6EBDA"/>
+  <path d="M388 220L428 154L468 220H388Z" fill="#C58A63"/>
+  <path d="M642 220L682 154L722 220H642Z" fill="#C58A63"/>
+  <rect x="528" y="170" width="54" height="48" rx="6" fill="#D6C2A8"/>
+  <path d="M520 182H590" stroke="#8B7B68" stroke-width="10"/>
+  <g fill="#2F7E4A">
+    <path d="M232 356L258 304L284 356H232Z"/>
+    <path d="M226 338C236 304 252 280 278 264C268 298 274 322 296 344L226 338Z"/>
+    <path d="M888 362L914 310L940 362H888Z"/>
+    <path d="M882 342C892 308 908 284 934 268C924 300 930 324 952 346L882 342Z"/>
+  </g>
+</svg>
