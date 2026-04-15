@@ -1011,38 +1011,26 @@ export default function PitchDeck() {
       </section>
 
       {/* Slide 8: Final — Know before you go */}
-      <section className="min-h-screen w-full flex flex-col items-center justify-center snap-start relative overflow-hidden bg-black">
-        {/* Background: global hotel distribution / earth at night */}
+      <section className="min-h-screen w-full snap-start relative overflow-hidden bg-black flex items-center justify-center">
+
+        {/* Layer 1: background photo */}
         <div
           className="absolute inset-0 z-0 bg-cover bg-center"
           style={{ backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80')` }}
         >
-          <div className="absolute inset-0 bg-black/70" />
+          <div className="absolute inset-0 bg-black/60" />
         </div>
 
-        {/* Pulsing global data points */}
-        <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" preserveAspectRatio="xMidYMid slice">
-          {[
-            { cx: '18%', cy: '35%' }, { cx: '32%', cy: '28%' }, { cx: '48%', cy: '42%' },
-            { cx: '62%', cy: '25%' }, { cx: '75%', cy: '38%' }, { cx: '85%', cy: '55%' },
-            { cx: '25%', cy: '60%' }, { cx: '55%', cy: '65%' }, { cx: '70%', cy: '62%' },
-          ].map((p, i) => (
-            <motion.circle
-              key={i} cx={p.cx} cy={p.cy} r="3"
-              fill="#60a5fa"
-              animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.8, 1] }}
-              transition={{ duration: 2 + i * 0.3, repeat: Infinity, delay: i * 0.4 }}
-            />
-          ))}
-        </svg>
-
-        {/* Booking moment: blurry → clear card */}
-        <div className="relative z-20 max-w-4xl w-full px-8 md:px-20 flex flex-col items-center gap-12">
+        {/* Layer 2: hotel card — blurry → sharp, then fades out */}
+        <motion.div
+          className="absolute inset-0 z-10 flex items-center justify-center px-8"
+          animate={{ opacity: [0, 1, 1, 0] }}
+          transition={{ duration: 5.5, times: [0, 0.18, 0.6, 0.82], ease: 'easeInOut', delay: 0.3 }}
+        >
           <motion.div
-            initial={{ filter: 'blur(12px)', opacity: 0.4 }}
-            whileInView={{ filter: 'blur(0px)', opacity: 1 }}
-            transition={{ duration: 1.4, delay: 0.3, ease: 'easeOut' }}
-            className="w-full max-w-lg bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7"
+            animate={{ filter: ['blur(20px)', 'blur(0px)', 'blur(0px)', 'blur(0px)'] }}
+            transition={{ duration: 5.5, times: [0, 0.18, 0.6, 0.82], ease: 'easeOut', delay: 0.3 }}
+            className="w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7"
           >
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -1055,62 +1043,52 @@ export default function PitchDeck() {
             </div>
             <div className="grid grid-cols-3 gap-3 mb-5">
               {[
-                { label: 'WiFi', score: '4.8', fresh: true },
-                { label: 'Noise', score: '4.2', fresh: true },
-                { label: 'Check-in', score: '4.9', fresh: true },
+                { label: 'WiFi', score: '4.8' },
+                { label: 'Noise', score: '4.2' },
+                { label: 'Check-in', score: '4.9' },
               ].map((attr, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 10 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.8 + i * 0.1 }}
-                  className="bg-white/10 rounded-2xl p-3 text-center"
-                >
+                <div key={i} className="bg-white/10 rounded-2xl p-3 text-center">
                   <div className="text-white/50 text-[10px] mb-1">{attr.label}</div>
                   <div className="text-white font-black text-xl">{attr.score}</div>
-                  {attr.fresh && <div className="text-green-400 text-[9px] mt-1 font-mono">● Fresh</div>}
-                </motion.div>
+                  <div className="text-green-400 text-[9px] mt-1 font-mono">● Fresh</div>
+                </div>
               ))}
             </div>
-            <motion.button
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 1.2, duration: 0.5 }}
-              className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3.5 rounded-2xl text-base"
-            >
+            <div className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-2xl text-base text-center">
               Book Now
-            </motion.button>
+            </div>
           </motion.div>
+        </motion.div>
 
-          {/* Final line */}
-          <div className="text-center">
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 1.6 }}
-              className="text-white/40 text-sm uppercase tracking-widest mb-6 font-mono"
-            >
-              We don&apos;t just help people choose better stays.<br />
-              We help platforms understand reality — continuously, accurately, and at scale.
-            </motion.p>
-            <motion.h1
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1, delay: 2.0, ease: 'easeOut' }}
-              className="text-5xl md:text-7xl font-bold text-white tracking-tight"
-            >
-              Know before you go.
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 2.6 }}
-              className="mt-6 text-white/30 text-sm italic tracking-widest uppercase"
-            >
-              PRISM by PARC Group
-            </motion.p>
-          </div>
-        </div>
+        {/* Layer 3: black overlay that fades in after card clears */}
+        <motion.div
+          className="absolute inset-0 z-20 bg-black"
+          animate={{ opacity: [0, 0, 0, 1, 1] }}
+          transition={{ duration: 5.5, times: [0, 0.55, 0.68, 0.85, 1], ease: 'easeIn', delay: 0.3 }}
+        />
+
+        {/* Layer 4: final text — appears on pure black */}
+        <motion.div
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-8"
+          animate={{ opacity: [0, 0, 0, 0, 1] }}
+          transition={{ duration: 6.5, times: [0, 0.6, 0.75, 0.85, 1], ease: 'easeOut', delay: 0.3 }}
+        >
+          <motion.h1
+            animate={{ letterSpacing: ['0.02em', '0.06em'] }}
+            transition={{ duration: 2, delay: 5.5, ease: 'easeOut' }}
+            className="text-5xl md:text-8xl font-bold text-white tracking-tight"
+          >
+            Know before you go.
+          </motion.h1>
+          <motion.p
+            animate={{ opacity: [0, 1] }}
+            transition={{ duration: 1.2, delay: 6.2 }}
+            className="mt-8 text-white/30 text-xs italic tracking-widest uppercase font-mono"
+          >
+            PRISM by PARC Group
+          </motion.p>
+        </motion.div>
+
       </section>
 
       {/* Footer */}
