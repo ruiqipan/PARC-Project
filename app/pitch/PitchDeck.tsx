@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion, useAnimation, useInView } from 'framer-motion';
 import {
   RefreshCw,
@@ -124,42 +124,50 @@ const DecayChart = () => {
   );
 };
 
-// --- Final slide: blur → clear → black → tagline (starts on scroll-in, plays once) ---
+const BACKGROUND_COMMENTS = [
+  { text: '"WiFi was fast enough for back-to-back video calls."', tag: 'Business Traveler', x: '5%',  y: '12%', delay: 0.2 },
+  { text: '"Surprisingly quiet — slept better than at home."',    tag: 'Light Sleeper',    x: '60%', y: '8%',  delay: 0.5 },
+  { text: '"They actually welcomed our dog at check-in!"',        tag: 'Pet Owner',        x: '72%', y: '55%', delay: 0.8 },
+  { text: '"Check-in at 11pm was completely seamless."',          tag: 'Late Arrival',     x: '3%',  y: '62%', delay: 0.4 },
+  { text: '"Pool was open and warm — kids loved it."',            tag: 'Family Traveler',  x: '30%', y: '82%', delay: 0.9 },
+  { text: '"Breakfast had solid gluten-free options."',           tag: 'Dietary Needs',    x: '68%', y: '78%', delay: 0.6 },
+];
+
+// --- Final slide: scroll-in → card clears → floating comments → click Book Now → black + slogan ---
 function FinalSlide() {
   const ref = useRef<HTMLElement>(null);
   const isInView = useInView(ref, { once: true, amount: 0.6 });
+  const [booked, setBooked] = useState(false);
   const cardControls = useAnimation();
+  const commentsControls = useAnimation();
   const overlayControls = useAnimation();
   const textControls = useAnimation();
 
+  // Phase 1: scroll-in → card sharpens → comments drift in
   useEffect(() => {
     if (!isInView) return;
     const run = async () => {
-      // 1. Card blurs into focus
       await cardControls.start({
         filter: 'blur(0px)', opacity: 1,
         transition: { duration: 1.4, ease: 'easeOut' },
       });
-      // 2. Hold clear for 1.8s
-      await new Promise(r => setTimeout(r, 1800));
-      // 3. Card fades out (no return)
-      cardControls.start({
-        opacity: 0,
-        transition: { duration: 1.2, ease: 'easeIn' },
-      });
-      // 4. Black overlay fades in simultaneously
-      await overlayControls.start({
+      await commentsControls.start({
         opacity: 1,
-        transition: { duration: 1.4, ease: 'easeIn' },
-      });
-      // 5. Tagline appears
-      await textControls.start({
-        opacity: 1,
-        transition: { duration: 1.2, ease: 'easeOut' },
+        transition: { duration: 0.8, ease: 'easeOut' },
       });
     };
     run();
-  }, [isInView, cardControls, overlayControls, textControls]);
+  }, [isInView, cardControls, commentsControls]);
+
+  // Phase 2: Book Now clicked → card + comments fade → black → slogan
+  const handleBook = async () => {
+    if (booked) return;
+    setBooked(true);
+    cardControls.start({ opacity: 0, transition: { duration: 1, ease: 'easeIn' } });
+    commentsControls.start({ opacity: 0, transition: { duration: 0.8, ease: 'easeIn' } });
+    await overlayControls.start({ opacity: 1, transition: { duration: 1.4, ease: 'easeIn' } });
+    await textControls.start({ opacity: 1, transition: { duration: 1.2, ease: 'easeOut' } });
+  };
 
   return (
     <section ref={ref} className="min-h-screen w-full snap-start relative overflow-hidden bg-black flex items-center justify-center">
@@ -168,16 +176,39 @@ function FinalSlide() {
         className="absolute inset-0 z-0 bg-cover bg-center"
         style={{ backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80')` }}
       >
-        <div className="absolute inset-0 bg-black/60" />
+        <div className="absolute inset-0 bg-black/65" />
       </div>
 
-      {/* Hotel card: starts blurry, sharpens, then fades away */}
+      {/* Floating background comments */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={commentsControls}
+        className="absolute inset-0 z-10 pointer-events-none"
+      >
+        {BACKGROUND_COMMENTS.map((c, i) => (
+          <motion.div
+            key={i}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: [0, 0.55, 0.45, 0.55], y: [8, 0, -4, 0] }}
+            transition={{ opacity: { duration: 1.2, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
+            className="absolute max-w-[220px]"
+            style={{ left: c.x, top: c.y }}
+          >
+            <div className="bg-white/8 border border-white/15 backdrop-blur-sm rounded-2xl px-3 py-2">
+              <p className="text-white/70 text-[11px] leading-relaxed italic mb-1.5">{c.text}</p>
+              <span className="text-[9px] px-2 py-0.5 bg-blue-500/25 text-blue-300 rounded-full font-medium">{c.tag}</span>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Hotel card — blurry on load, sharpens, stays until Book Now */}
       <motion.div
         initial={{ filter: 'blur(20px)', opacity: 0 }}
         animate={cardControls}
-        className="absolute inset-0 z-10 flex items-center justify-center px-8 pointer-events-none"
+        className="relative z-20 w-full max-w-md mx-8"
       >
-        <div className="w-full max-w-md bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7">
+        <div className="bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7">
           <div className="flex items-center justify-between mb-5">
             <div>
               <div className="text-white font-bold text-lg">Omni Interlocken Hotel</div>
@@ -196,24 +227,27 @@ function FinalSlide() {
               </div>
             ))}
           </div>
-          <div className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-2xl text-base text-center">
+          <button
+            onClick={handleBook}
+            className="w-full bg-blue-600 hover:bg-blue-500 active:scale-95 transition-all text-white font-bold py-3.5 rounded-2xl text-base cursor-pointer"
+          >
             Book Now
-          </div>
+          </button>
         </div>
       </motion.div>
 
-      {/* Black overlay — fades in after card clears */}
+      {/* Black overlay — triggered by Book Now */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={overlayControls}
-        className="absolute inset-0 z-20 bg-black"
+        className="absolute inset-0 z-30 bg-black pointer-events-none"
       />
 
-      {/* Tagline — appears on pure black */}
+      {/* Slogan — on pure black */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={textControls}
-        className="absolute inset-0 z-30 flex flex-col items-center justify-center text-center px-8"
+        className="absolute inset-0 z-40 flex flex-col items-center justify-center text-center px-8 pointer-events-none"
       >
         <h1 className="text-5xl md:text-8xl font-bold text-white tracking-tight">
           Know before you go.
