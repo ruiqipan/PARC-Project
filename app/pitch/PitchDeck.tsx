@@ -110,7 +110,7 @@ const DecayChart = () => {
             stroke={c.color}
             strokeWidth="3"
             initial={{ pathLength: 0 }}
-            whileInView={{ pathLength: 1 }}
+            animate={{ pathLength: 1 }}
             transition={{ duration: 1.5, delay: i * 0.2 }}
           />
         ))}
