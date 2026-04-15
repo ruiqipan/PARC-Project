@@ -124,17 +124,26 @@ const DecayChart = () => {
   );
 };
 
+// Honeycomb: 3 cols × 4 rows, offset every other row, center column avoided mid-screen
+// Each pill is wide + single-line so they read as thin elongated strips
 const BACKGROUND_COMMENTS = [
-  { text: '"WiFi fast enough for back-to-back video calls."',  tag: 'Business Traveler',  x: '1%',  y: '5%',  delay: 0.2 },
-  { text: '"Desk setup was perfect for remote work."',         tag: 'Remote Worker',       x: '3%',  y: '42%', delay: 0.7 },
-  { text: '"Check-in at 11pm was completely seamless."',       tag: 'Late Arrival',        x: '0%',  y: '72%', delay: 0.3 },
-  { text: '"Gluten-free breakfast options were plentiful."',   tag: 'Dietary Needs',       x: '5%',  y: '86%', delay: 0.9 },
-  { text: '"Surprisingly quiet — slept better than at home."', tag: 'Light Sleeper',       x: '22%', y: '2%',  delay: 0.5 },
-  { text: '"Pool open till 10pm — kids were thrilled."',       tag: 'Family Traveler',     x: '18%', y: '88%', delay: 1.0 },
-  { text: '"Dog was welcomed with treats at check-in!"',       tag: 'Pet Owner',           x: '66%', y: '3%',  delay: 0.4 },
-  { text: '"Ramp access was clearly marked and easy."',        tag: 'Wheelchair User',     x: '72%', y: '22%', delay: 0.8 },
-  { text: '"Staff spoke Mandarin — huge relief for us."',      tag: 'International Guest', x: '70%', y: '58%', delay: 0.6 },
-  { text: '"Free parking made the road trip stress-free."',    tag: 'Road Tripper',        x: '65%', y: '82%', delay: 0.5 },
+  // Row 1  (y≈5%)  — full width, 3 pills
+  { text: '"WiFi solid for video calls all day."',         tag: 'Business Traveler',  x: '2%',  y: '5%',  delay: 0.15 },
+  { text: '"Quietest room I\'ve had in years."',           tag: 'Light Sleeper',       x: '34%', y: '5%',  delay: 0.30 },
+  { text: '"Dog got treats at check-in — loved it."',      tag: 'Pet Owner',           x: '66%', y: '5%',  delay: 0.45 },
+  // Row 2  (y≈20%) — offset, 2 pills (left + right)
+  { text: '"Desk and chair were actually ergonomic."',     tag: 'Remote Worker',       x: '2%',  y: '20%', delay: 0.25 },
+  { text: '"Ramp to entrance clearly marked."',            tag: 'Wheelchair User',     x: '72%', y: '20%', delay: 0.55 },
+  // Row 3  (y≈35%) — 3 pills
+  { text: '"Check-in at midnight, zero friction."',        tag: 'Late Arrival',        x: '2%',  y: '35%', delay: 0.20 },
+  { text: '"Staff spoke Mandarin fluently."',              tag: 'International Guest', x: '72%', y: '35%', delay: 0.60 },
+  // Row 4  (y≈65%) — offset, 2 pills
+  { text: '"Pool open till 10pm — kids thrilled."',        tag: 'Family Traveler',     x: '2%',  y: '65%', delay: 0.35 },
+  { text: '"Free parking, no stress on arrival."',         tag: 'Road Tripper',        x: '72%', y: '65%', delay: 0.50 },
+  // Row 5  (y≈80%) — 3 pills
+  { text: '"Gluten-free options at breakfast."',           tag: 'Dietary Needs',       x: '2%',  y: '82%', delay: 0.40 },
+  { text: '"Spa booking was seamless via app."',           tag: 'Wellness Traveler',   x: '34%', y: '82%', delay: 0.65 },
+  { text: '"Safety info was current and accurate."',       tag: 'Solo Traveler',       x: '66%', y: '82%', delay: 0.70 },
 ];
 
 // --- Final slide: scroll-in → card clears → floating comments → click Book Now → black + slogan ---
@@ -193,14 +202,14 @@ function FinalSlide() {
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: [0, 0.82, 0.72, 0.82], y: [8, 0, -5, 0] }}
-            transition={{ opacity: { duration: 1.2, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
-            className="absolute max-w-[210px]"
+            animate={{ opacity: [0, 0.85, 0.75, 0.85], y: [6, 0, -4, 0] }}
+            transition={{ opacity: { duration: 1.0, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
+            className="absolute w-[230px]"
             style={{ left: c.x, top: c.y }}
           >
-            <div className="bg-white/12 border border-white/25 backdrop-blur-sm rounded-2xl px-3.5 py-2.5">
-              <p className="text-white/85 text-[11px] leading-relaxed italic mb-2">{c.text}</p>
-              <span className="text-[9px] px-2 py-0.5 bg-blue-500/35 text-blue-200 rounded-full font-semibold">{c.tag}</span>
+            <div className="bg-white/10 border border-white/22 backdrop-blur-sm rounded-full px-3.5 py-1.5 flex items-center gap-2">
+              <span className="text-[8px] px-1.5 py-0.5 bg-blue-500/40 text-blue-200 rounded-full font-semibold whitespace-nowrap shrink-0">{c.tag}</span>
+              <p className="text-white/80 text-[10px] italic truncate">{c.text}</p>
             </div>
           </motion.div>
         ))}
