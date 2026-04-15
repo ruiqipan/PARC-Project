@@ -8,6 +8,35 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
+function hasMeaningfulReviewContent(review: Review): boolean {
+  return Boolean(review.review_title?.trim() || review.review_text?.trim());
+}
+
+function getReviewDisplayPriority(review: Review): number {
+  const hasTitle = Boolean(review.review_title?.trim());
+  const hasBody = Boolean(review.review_text?.trim());
+
+  if (hasTitle && hasBody) {
+    return 2;
+  }
+
+  if (hasTitle || hasBody) {
+    return 1;
+  }
+
+  // Untitled and bodyless reviews should always sink to the bottom.
+  return 0;
+}
+
+function getReviewTimestamp(review: Review): number {
+  if (!review.acquisition_date) {
+    return 0;
+  }
+
+  const time = new Date(review.acquisition_date).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
 async function getHotelData(id: string) {
   try {
     const supabase = createServerClient();
@@ -65,8 +94,21 @@ async function getHotelData(id: string) {
       reviewer_tags: s.user_id ? (personaMap[s.user_id as string] ?? []) : [],
     }));
 
-    // Merge: user submissions first, then historic reviews
-    const reviews: Review[] = [...mappedSubmissions, ...((historicReviews ?? []) as Review[])];
+    const reviews: Review[] = [...mappedSubmissions, ...((historicReviews ?? []) as Review[])]
+      .sort((a, b) => {
+        const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
+        if (priorityDelta !== 0) {
+          return priorityDelta;
+        }
+
+        const aHasContent = hasMeaningfulReviewContent(a);
+        const bHasContent = hasMeaningfulReviewContent(b);
+        if (aHasContent !== bHasContent) {
+          return aHasContent ? -1 : 1;
+        }
+
+        return getReviewTimestamp(b) - getReviewTimestamp(a);
+      });
 
     return { hotel: hotel as Hotel, reviews };
   } catch {

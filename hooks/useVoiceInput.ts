@@ -44,6 +44,48 @@ declare global {
   }
 }
 
+function normalizeTranscriptSpacing(transcript: string): string {
+  return transcript
+    // Normalize exotic whitespace to plain spaces first.
+    .replace(/[\u00a0\u2000-\u200b\u202f\u205f\u3000]/g, ' ')
+    // Remove spaces inserted between CJK characters.
+    .replace(/([\u3400-\u9fff])\s+(?=[\u3400-\u9fff])/g, '$1')
+    // Remove spaces between CJK characters and common Chinese punctuation.
+    .replace(/([\u3400-\u9fff])\s+([，。！？；：、])/g, '$1$2')
+    .replace(/([，。！？；：、])\s+([\u3400-\u9fff])/g, '$1$2')
+    // Tighten English punctuation spacing for cleaner dictation output.
+    .replace(/\s+([,.;!?%])/g, '$1')
+    .replace(/([([{])\s+/g, '$1')
+    .replace(/\s+([)\]}])/g, '$1')
+    // Re-join common contractions split by speech engines.
+    .replace(/\b([A-Za-z]+)\s+'\s+([A-Za-z]+)\b/g, "$1'$2")
+    .replace(/\b([A-Za-z]+)\s+n\s*'\s*t\b/gi, "$1n't")
+    // Avoid duplicate punctuation emitted by unstable interim results.
+    .replace(/([,.;!?])\1+/g, '$1')
+    // Collapse excessive ASCII spacing while preserving normal word boundaries.
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+}
+
+function buildTranscriptFromResults(results: SpeechRecognitionResultList): string {
+  let finalText = '';
+  let interimText = '';
+
+  for (let i = 0; i < results.length; i++) {
+    const segment = results[i]?.[0]?.transcript?.trim();
+    if (!segment) continue;
+
+    if (results[i].isFinal) {
+      finalText += `${segment} `;
+    } else {
+      interimText += `${segment} `;
+    }
+  }
+
+  return normalizeTranscriptSpacing(`${finalText}${interimText}`);
+}
+
 // ─── NLP helpers ──────────────────────────────────────────────────────────────
 
 /**
@@ -149,7 +191,12 @@ export interface UseVoiceInputReturn {
   isUnsupported: boolean;
 }
 
-export function useVoiceInput(): UseVoiceInputReturn {
+interface UseVoiceInputOptions {
+  lang?: string;
+}
+
+export function useVoiceInput(options: UseVoiceInputOptions = {}): UseVoiceInputReturn {
+  const lang = options.lang ?? 'en-US';
   const hasSpeechRecognition =
     typeof window !== 'undefined' &&
     Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
@@ -171,15 +218,10 @@ export function useVoiceInput(): UseVoiceInputReturn {
     const rec = new Ctor();
     rec.continuous     = true;
     rec.interimResults = true;
-    rec.lang           = 'en-US';
+    rec.lang           = lang;
 
     rec.onresult = (e: SpeechRecognitionEvent) => {
-      // Concatenate all result segments into a running transcript.
-      let full = '';
-      for (let i = 0; i < e.results.length; i++) {
-        full += e.results[i][0].transcript;
-      }
-      setTranscript(full);
+      setTranscript(buildTranscriptFromResults(e.results));
     };
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
@@ -198,7 +240,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
       rec.onend    = null;
       try { rec.stop(); } catch { /* already stopped */ }
     };
-  }, [hasSpeechRecognition]);
+  }, [hasSpeechRecognition, lang]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListening) return;

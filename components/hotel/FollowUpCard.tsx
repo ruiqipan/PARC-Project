@@ -367,7 +367,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
     startListening,
     stopListening,
     isUnsupported,
-  } = useVoiceInput();
+  } = useVoiceInput({ lang: 'en-US' });
 
   const toggleMic = useCallback(() => {
     if (isListening) {

@@ -73,6 +73,8 @@ type PolishState = 'idle' | 'loading' | 'done' | 'error';
 
 export default function ReviewInput({ propertyId, userId, username, onSubmitSuccess }: ReviewInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const voiceBaseTextRef = useRef('');
+  const isVoiceSessionRef = useRef(false);
 
   const [text, setText] = useState('');
   const [originalText, setOriginalText] = useState(''); // pre-polish snapshot
@@ -91,31 +93,37 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
   const visibleCount = 2; // cards visible at once
 
   // Voice input
-  const { isListening, transcript, startListening, stopListening, isUnsupported } = useVoiceInput();
-  const prevTranscriptRef = useRef('');
+  const { isListening, transcript, startListening, stopListening, isUnsupported } = useVoiceInput({
+    lang: 'en-US',
+  });
 
-  // Append new voice transcript words into the textarea as they arrive
+  // Keep voice dictation as a stable draft region instead of appending transcript deltas.
   useEffect(() => {
-    if (!transcript) return;
-    const prev = prevTranscriptRef.current;
-    // Only append the newly recognised portion to avoid re-inserting existing text
-    const newPart = transcript.slice(prev.length);
-    if (newPart) {
-      setText(t => {
-        const base = t.trimEnd();
-        return base ? `${base} ${newPart}` : newPart;
-      });
+    if (!isVoiceSessionRef.current) return;
+
+    const base = voiceBaseTextRef.current.trimEnd();
+    const combined = transcript
+      ? (base ? `${base}${base.endsWith('\n') ? '' : ' '}${transcript}` : transcript)
+      : base;
+
+    setText(prev => (prev === combined ? prev : combined));
+
+    if (transcript) {
       setIsPolished(false);
     }
-    prevTranscriptRef.current = transcript;
-  }, [transcript]);
+
+    if (!isListening) {
+      isVoiceSessionRef.current = false;
+      voiceBaseTextRef.current = combined;
+    }
+  }, [isListening, transcript]);
 
   function handleVoiceToggle() {
     if (isListening) {
       stopListening();
-      prevTranscriptRef.current = '';
     } else {
-      prevTranscriptRef.current = '';
+      voiceBaseTextRef.current = text.trimEnd();
+      isVoiceSessionRef.current = true;
       startListening();
       focusTextarea();
     }
