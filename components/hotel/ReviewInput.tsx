@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
+import type { FollowUpQuestion } from '@/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,21 @@ const QA_ITEMS: QAItem[] = [
   { id: 6, question: 'How was the noise level in your room?',              seed: 'The noise level in the room was ' },
 ];
 
+// ── Map follow-up engine questions → QAItem carousel cards ───────────────────
+
+function mapFollowUpToQAItems(questions: FollowUpQuestion[]): QAItem[] {
+  return questions.map((q, i) => {
+    const name = q.feature_name.replace(/_/g, ' ');
+    if (q.ui_type === 'Slider') {
+      return { id: 100 + i, question: q.prompt, seed: `The ${name} was ` };
+    } else if (q.ui_type === 'Agreement') {
+      return { id: 100 + i, question: q.statement, seed: `I think ${q.statement.toLowerCase()} — ` };
+    } else {
+      return { id: 100 + i, question: q.prompt, seed: q.options[0] ? `${q.options[0]}: ` : `${name}: ` };
+    }
+  });
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface ReviewInputProps {
@@ -67,7 +83,9 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [submitError, setSubmitError] = useState('');
 
-  // Q&A carousel index
+  // Q&A carousel
+  const [qaItems, setQaItems] = useState<QAItem[]>(QA_ITEMS);
+  const [qaLoading, setQaLoading] = useState(false);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const visibleCount = 2; // cards visible at once
 
@@ -191,7 +209,11 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       if (username) payload.username = username;
       if (rating > 0) payload.rating = rating;
 
-      const { error } = await supabase.from('Review_Submissions').insert(payload);
+      const { data: inserted, error } = await supabase
+        .from('Review_Submissions')
+        .insert(payload)
+        .select('id')
+        .single();
 
       if (error) throw new Error(error.message);
 
@@ -202,6 +224,30 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       setPolishState('idle');
       setRating(0);
       onSubmitSuccess?.();
+
+      // Refresh Top Q&A with personalized follow-up questions from the recommendation engine
+      if (userId && inserted?.id) {
+        setQaLoading(true);
+        try {
+          const res = await fetch('/api/reviews/follow-up', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ review_id: inserted.id, property_id: propertyId, user_id: userId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const newItems = mapFollowUpToQAItems(data.questions ?? []);
+            if (newItems.length > 0) {
+              setQaItems(newItems);
+              setCarouselIndex(0);
+            }
+          }
+        } catch {
+          // silently fail — carousel keeps showing default items
+        } finally {
+          setQaLoading(false);
+        }
+      }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not save review. Please try again.');
       setSubmitState('error');
@@ -210,8 +256,8 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
 
   // ── Carousel nav ─────────────────────────────────────────────────────────
 
-  const maxIndex = Math.max(0, QA_ITEMS.length - visibleCount);
-  const visibleQA = QA_ITEMS.slice(carouselIndex, carouselIndex + visibleCount);
+  const maxIndex = Math.max(0, qaItems.length - visibleCount);
+  const visibleQA = qaItems.slice(carouselIndex, carouselIndex + visibleCount);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -251,7 +297,14 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
 
       {/* ── Q&A Carousel ───────────────────────────────────────────────────── */}
       <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Top Q&amp;A</p>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+          Top Q&amp;A
+          {qaLoading && (
+            <svg className="size-3 animate-spin text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          )}
+        </p>
         <div className="flex items-center gap-2">
           {/* Prev */}
           <button
