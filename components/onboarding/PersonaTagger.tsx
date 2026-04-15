@@ -2,8 +2,9 @@
 
 import { useState, useTransition, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, PencilLine, Plus, UserRound, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 // ─── Tag definitions (PRD Feature 1) ──────────────────────────────────────────
@@ -109,6 +110,8 @@ interface PersonaTaggerProps {
   userId: string;
   username: string;
   initialSelectedTags?: string[];
+  initialCategories?: string[];
+  hasSavedProfile?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -119,16 +122,26 @@ export default function PersonaTagger({
   userId,
   username,
   initialSelectedTags = [],
+  initialCategories = [],
+  hasSavedProfile = false,
 }: PersonaTaggerProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelectedTags));
   const [customTags, setCustomTags] = useState<string[]>(() =>
     initialSelectedTags.filter(tag => !PRESET_TAGS.has(tag))
   );
+  const [isEditing, setIsEditing] = useState(!hasSavedProfile);
+  const [profileSaved, setProfileSaved] = useState(hasSavedProfile);
   const [inputValue, setInputValue] = useState('');
   const [searchValue, setSearchValue] = useState('');
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const initialCategoryByTag = new Map(
+    initialSelectedTags.map((tag, index) => [tag, initialCategories[index] ?? 'Custom'])
+  );
+  const presetCategoryByTag = new Map(
+    PRESET_GROUPS.flatMap(group => group.items.map(item => [item.tag, item.category] as const))
+  );
   const trimmedSearch = searchValue.trim().toLowerCase();
   const visibleGroups = PRESET_GROUPS
     .map(group => {
@@ -145,6 +158,17 @@ export default function PersonaTagger({
       };
     })
     .filter(group => group.items.length > 0);
+  const summaryGroups = Array.from(selected).reduce<Record<string, string[]>>((acc, tag) => {
+    const category = presetCategoryByTag.get(tag) ?? initialCategoryByTag.get(tag) ?? 'Custom';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(tag);
+    return acc;
+  }, {});
+  const additionalSummaryGroups = Object.entries(summaryGroups).filter(
+    ([category]) => category !== 'Custom' && !PRESET_GROUPS.some(group => group.heading === category)
+  );
 
   // Toggle a preset tag on/off
   function toggleTag(tag: string) {
@@ -225,7 +249,9 @@ export default function PersonaTagger({
       try {
         await save();
         setStatus('success');
-        setTimeout(() => router.push('/'), 900);
+        setProfileSaved(true);
+        setIsEditing(false);
+        router.refresh();
       } catch {
         setStatus('error');
       }
@@ -238,6 +264,128 @@ export default function PersonaTagger({
 
   const totalSelected = selected.size;
 
+  if (!isEditing && profileSaved) {
+    return (
+      <div className="min-h-screen bg-gray-50 px-4 py-12">
+        <div className="mx-auto max-w-3xl">
+          <motion.section
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+            className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm"
+          >
+            <div className="border-b border-gray-100 bg-gradient-to-r from-[#003580] to-[#005db8] px-6 py-8 text-white sm:px-8">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-50">
+                    <UserRound size={14} />
+                    My Profile
+                  </div>
+                  <h1 className="mt-4 text-3xl font-bold tracking-tight">{username}</h1>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-blue-50/90">
+                    These tags shape which reviews feel most relevant to you and which follow-up questions PARC prioritizes.
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStatus('idle');
+                      setIsEditing(true);
+                    }}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#003580] transition hover:bg-blue-50"
+                  >
+                    <PencilLine size={16} />
+                    Edit Tags
+                  </button>
+                  <Link
+                    href="/"
+                    className="inline-flex items-center rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    Browse Hotels
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-7 sm:px-8">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                <span className="rounded-full bg-gray-100 px-3 py-1 font-medium text-gray-700">
+                  {totalSelected} tag{totalSelected !== 1 ? 's' : ''} selected
+                </span>
+                <span>Signed in as {username}</span>
+              </div>
+
+              <div className="mt-7 space-y-6">
+                {PRESET_GROUPS.map(group => {
+                  const items = summaryGroups[group.heading] ?? [];
+                  if (items.length === 0) {
+                    return null;
+                  }
+
+                  return (
+                  <section key={group.heading}>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      {group.heading}
+                    </h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {items.map(tag => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                  );
+                })}
+
+                {(summaryGroups.Custom ?? []).length > 0 && (
+                  <section>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Custom Tags
+                    </h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(summaryGroups.Custom ?? []).map(tag => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {additionalSummaryGroups.map(([category, items]) => (
+                  <section key={category}>
+                    <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      {category}
+                    </h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {items.map(tag => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          </motion.section>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4">
       {/* Header */}
@@ -248,7 +396,7 @@ export default function PersonaTagger({
           transition={{ duration: 0.4 }}
           className="text-3xl font-bold text-gray-900 tracking-tight"
         >
-          Tell us about yourself
+          {profileSaved ? 'Edit your profile' : 'Tell us about yourself'}
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: -8 }}
@@ -369,10 +517,10 @@ export default function PersonaTagger({
       <div className="w-full max-w-2xl mt-10 flex flex-col sm:flex-row items-center justify-between gap-3">
         <button
           type="button"
-          onClick={handleSkip}
+          onClick={profileSaved ? () => setIsEditing(false) : handleSkip}
           className="text-sm text-gray-400 hover:text-gray-600 transition-colors underline underline-offset-2"
         >
-          Skip for now
+          {profileSaved ? 'Back to profile' : 'Skip for now'}
         </button>
 
         <div className="flex items-center gap-3">
@@ -404,7 +552,7 @@ export default function PersonaTagger({
                 </motion.span>
               ) : (
                 <motion.span key="cta" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  Save &amp; Continue
+                  {profileSaved ? 'Save Profile' : 'Save Profile'}
                 </motion.span>
               )}
             </AnimatePresence>

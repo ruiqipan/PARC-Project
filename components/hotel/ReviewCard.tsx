@@ -16,7 +16,7 @@
  *   cluster and register as a match.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Review, PersonaMatch } from '@/types';
 import {
   matchPersonaTags,
@@ -25,6 +25,22 @@ import {
 } from '@/lib/persona-match';
 import { RATING_LABELS } from '@/lib/utils';
 import { Users } from 'lucide-react';
+
+interface TranslationOption {
+  value: string;
+  label: string;
+}
+
+const TRANSLATION_OPTIONS: TranslationOption[] = [
+  { value: 'English', label: 'English' },
+  { value: 'Chinese (Simplified)', label: 'Chinese (Simplified)' },
+  { value: 'Spanish', label: 'Spanish' },
+  { value: 'French', label: 'French' },
+  { value: 'Japanese', label: 'Japanese' },
+  { value: 'Korean', label: 'Korean' },
+  { value: 'German', label: 'German' },
+  { value: 'Portuguese', label: 'Portuguese' },
+];
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -48,6 +64,44 @@ function formatDate(raw: string | null): string {
   const d = new Date(raw);
   if (isNaN(d.getTime())) return raw;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function looksNonEnglish(text: string | null): boolean {
+  if (!text) return false;
+
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  if (/[^\u0000-\u024f\s.,!?;:'"()\-[\]{}%/&]/.test(trimmed)) {
+    return true;
+  }
+
+  if (/[à-ÿÀ-Ÿ]/.test(trimmed)) {
+    return true;
+  }
+
+  const lower = trimmed.toLowerCase();
+  const words = lower.match(/[a-zÀ-ÿ]+/g) ?? [];
+  if (words.length < 4) {
+    return false;
+  }
+
+  const englishSignals = new Set([
+    'the', 'and', 'was', 'were', 'with', 'for', 'this', 'that', 'very', 'staff',
+    'room', 'hotel', 'stay', 'location', 'clean', 'great', 'good', 'bad',
+  ]);
+  const nonEnglishSignals = new Set([
+    'el', 'la', 'los', 'las', 'una', 'muy', 'pero', 'porque', 'gracias',
+    'le', 'les', 'des', 'une', 'avec', 'pour', 'très', 'mais',
+    'der', 'die', 'das', 'und', 'nicht', 'mit', 'zimmer',
+    'il', 'lo', 'gli', 'sono', 'molto', 'con',
+    'de', 'do', 'da', 'não', 'com', 'muito',
+  ]);
+
+  const englishCount = words.filter(word => englishSignals.has(word)).length;
+  const nonEnglishCount = words.filter(word => nonEnglishSignals.has(word)).length;
+
+  return nonEnglishCount >= 2 && nonEnglishCount >= englishCount;
 }
 
 // ─── Similarity Badge ─────────────────────────────────────────────────────────
@@ -113,6 +167,11 @@ export default function ReviewCard({
   userTags = [],
   reviewerTags,
 }: ReviewCardProps) {
+  const [targetLanguage, setTargetLanguage] = useState('English');
+  const [translationState, setTranslationState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [translatedText, setTranslatedText] = useState('');
+  const [translationError, setTranslationError] = useState('');
+  const [detectedLanguage, setDetectedLanguage] = useState('');
   const overall = review.rating?.overall ?? 0;
   const subRatings = Object.entries(review.rating ?? {}).filter(
     ([key, val]) => key !== 'overall' && typeof val === 'number' && (val as number) > 0,
@@ -140,6 +199,42 @@ export default function ReviewCard({
     const unmatched = resolvedReviewerTags.filter(t => !matchedTags.includes(t));
     return [...matchedTags, ...unmatched].slice(0, 3);
   }, [resolvedReviewerTags, matches]);
+  const shouldOfferTranslation = useMemo(
+    () => looksNonEnglish(review.review_text),
+    [review.review_text],
+  );
+
+  async function handleTranslate() {
+    if (!review.review_text || translationState === 'loading') {
+      return;
+    }
+
+    setTranslationState('loading');
+    setTranslationError('');
+
+    try {
+      const res = await fetch('/api/reviews/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reviewText: review.review_text,
+          targetLanguage,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error ?? `Request failed (${res.status})`);
+      }
+
+      setDetectedLanguage(data.detectedLanguage ?? '');
+      setTranslatedText(data.translatedText ?? '');
+      setTranslationState('done');
+    } catch (err) {
+      setTranslationError(err instanceof Error ? err.message : 'Translation failed. Please try again.');
+      setTranslationState('error');
+    }
+  }
 
   return (
     <article className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
@@ -205,6 +300,64 @@ export default function ReviewCard({
         <p className="text-gray-700 text-sm leading-relaxed line-clamp-4 mb-3">
           {review.review_text}
         </p>
+      )}
+
+      {review.review_text && shouldOfferTranslation && (
+        <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3.5 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                Translation
+              </p>
+              <p className="mt-1 text-xs text-amber-800/80">
+                Translate this review into your preferred language.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <select
+                value={targetLanguage}
+                onChange={e => {
+                  setTargetLanguage(e.target.value);
+                  setTranslationState('idle');
+                  setTranslatedText('');
+                  setTranslationError('');
+                }}
+                className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-300"
+              >
+                {TRANSLATION_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleTranslate}
+                disabled={translationState === 'loading'}
+                className="rounded-lg bg-amber-500 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {translationState === 'loading' ? 'Translating…' : `Translate to ${targetLanguage}`}
+              </button>
+            </div>
+          </div>
+
+          {translationState === 'done' && translatedText && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-3">
+              <p className="text-xs font-medium text-amber-700">
+                {detectedLanguage ? `Detected: ${detectedLanguage}` : 'Translated review'}
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-gray-700">
+                {translatedText}
+              </p>
+            </div>
+          )}
+
+          {translationState === 'error' && (
+            <p className="mt-3 text-sm text-red-600">{translationError}</p>
+          )}
+        </div>
       )}
 
       {/* ── Sub-ratings ────────────────────────────────────────────────────── */}

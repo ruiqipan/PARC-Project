@@ -13,7 +13,7 @@ export default async function OnboardingPage() {
   const supabase = createServerClient();
   const { data: persona } = await supabase
     .from('User_Personas')
-    .select('tags, username')
+    .select('tags, categories, username')
     .eq('user_id', session.userId)
     .maybeSingle();
 
@@ -22,6 +22,8 @@ export default async function OnboardingPage() {
       userId={session.userId}
       username={persona?.username ?? session.username}
       initialSelectedTags={persona?.tags ?? []}
+      initialCategories={persona?.categories ?? []}
+      hasSavedProfile={Boolean(persona?.tags?.length)}
     />
   );
 }
