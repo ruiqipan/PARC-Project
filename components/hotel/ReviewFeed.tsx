@@ -24,7 +24,7 @@ export default function ReviewFeed({ reviews, userTags = [] }: ReviewFeedProps) 
       <div className="text-center py-16 text-gray-400">
         <p className="text-4xl mb-3">💬</p>
         <p className="font-medium text-gray-600">No reviews yet</p>
-        <p className="text-sm mt-1">This property hasn't received any reviews.</p>
+        <p className="text-sm mt-1">This property hasn&apos;t received any reviews.</p>
       </div>
     );
   }

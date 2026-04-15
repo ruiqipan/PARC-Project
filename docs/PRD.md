@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD): PARC APP
 
-**Version:** 2.0  
-**Last Updated:** 2026-04-14  
+**Version:** 2.1  
+**Last Updated:** 2026-04-15  
 **Status:** Active Development
 
 ---
@@ -24,7 +24,7 @@ PARC APP is a next-generation hotel booking and review platform designed to solv
 
 ## 3. Core User Flows
 
-- **Onboarding:** First-time visitor lands on `/` → middleware detects no session cookie → redirects to `/onboarding` → user selects identity/preference tags (or skips) → persona saved to `User_Personas` → redirected to hotel feed.
+- **Onboarding:** First-time visitor lands on `/` → proxy detects no session cookie → redirects to `/login` → user enters username → redirected to `/onboarding` → user selects identity/preference tags (or skips) → persona saved to `User_Personas` → redirected to hotel feed.
 - **Browsing:** User browses hotel list (sorted by guest rating, US-first) → opens hotel detail page → reads reviews with persona similarity badges.
 - **Drafting a Review:** User opens review form on hotel detail page → uses Quick Tags and/or voice input → optionally clicks "AI Polish" to structure the review → submits → review saved to `Review_Submissions`.
 - **Follow-Up (The "Aha" Moment):** After review submission → 4-Layer Engine queries `Description_PROC` and `Reviews_PROC` for gaps → user is presented with 1-2 interactive follow-up questions (slider or agreement axis) → user answers via tap, text, or voice.
@@ -36,18 +36,18 @@ PARC APP is a next-generation hotel booking and review platform designed to solv
 ### Feature 1: User Onboarding & Persona Engine
 **Status: Fully Implemented**
 
-- Users select broad identity tags on first visit (e.g., Business traveler, Wheelchair user, Guide dog owner, Neurodivergent, Tourist).
-- 27 preset tags across 5 groups: Travel Style, Accessibility, Health & Wellness, Lifestyle, Preferences.
+- Users select broad identity and preference tags on first visit (e.g., Business traveler, Wheelchair user, Guide dog owner, Neurodivergent, Tourist).
+- 55 curated preset tags across 6 groups: Travel Style, Trip Purpose, Accessibility, Sensory & Health, Companions & Household, Priorities & Preferences.
 - Users can add custom tags (Enter/comma to confirm). Tags can be skipped and updated anytime via `/onboarding`.
 - Tags and categories saved as parallel arrays in `User_Personas` (one row per user, upserted on save).
-- Anonymous session identity managed via `parc_anon_uid` cookie (1-year expiry, set by middleware).
+- Username-based session identity managed via `parc_user_id` and `parc_username` cookies (1-year expiry, set during login).
 
 ### Feature 2: Review Similarity Indicator
 **Status: Fully Implemented**
 
 - In the hotel review feed, each `ReviewCard` displays a similarity badge beneath the review metadata.
 - Reviewer tags are inferred from `lob` (line of business) and high-scoring rating dimensions in `Reviews_PROC`.
-- Logic uses static semantic cluster map (27+ clusters, zero-latency). Examples:
+- Logic uses static semantic cluster map covering the curated preset library plus review-derived synonyms (zero-latency). Examples:
   - User tag "Quiet" + reviewer high `roomcomfort` score → "Shares your focus: Quiet / Comfort"
   - User tag "Business traveler" + reviewer `lob = "business"` → "Similar traveler type: Business"
 - Optional async embedding fallback available for custom tags (OpenAI `text-embedding-3-small`).
@@ -71,7 +71,7 @@ Triggered via `POST /api/reviews/follow-up` after a review is submitted. Returns
 
 2. **Review Blind Spot Detector (Layer 2):** Reads hotel claims from `Description_PROC` (amenity flags, policy fields). Cross-references against `Reviews_PROC`. If a claimed feature has no recent reviewer confirmation, it becomes a high-priority gap.
 
-3. **Personalized Persona Matching (Layer 3):** Loads the submitting user's tags from `User_Personas`. Boosts gap priority for attributes relevant to those tags (22 tag→attribute mappings; e.g., "Pet owner" → pet_policy, "Business traveler" → wifi_speed).
+3. **Personalized Persona Matching (Layer 3):** Loads the submitting user's tags from `User_Personas`. Boosts gap priority for attributes relevant to those tags across the 55-tag preset library (e.g., "Pet owner" → pet_policy, "Business traveler" → wifi).
 
 4. **Decision-Risk Minimization (Layer 4):** Merges duplicate gaps, applies deal-breaker weights (safety=10, accessibility=10, late_checkin=8, wifi=7, … breakfast_quality=2). Returns the top 2 gaps. Calls OpenAI `gpt-4o` to generate natural-language questions from the gaps. Falls back to deterministic template questions if LLM fails.
 
@@ -96,7 +96,7 @@ Converts open-ended questions into "Statements for Confirmation" (Recognition ov
 |---|---|
 | Framework | Next.js 16.2.3 (App Router, React 19) |
 | Styling | Tailwind CSS v4, Framer Motion 12 |
-| Database & Auth | Supabase (PostgreSQL) — anonymous session via cookie |
+| Database & Auth | Supabase (PostgreSQL) — username-based session via cookies |
 | LLM | OpenAI `gpt-4o` (review polish + follow-up question generation) |
 | Embeddings | OpenAI `text-embedding-3-small` (optional persona matching fallback) |
 | Audio | Web Speech API (browser-native, no API key required) |
@@ -130,9 +130,10 @@ review_text      Text
 **`User_Personas`** *(app-managed)*
 ```
 id         UUID  PK
-user_id    UUID  NOT NULL  (anonymous cookie UID)
+user_id    UUID  NOT NULL  (stable app session user ID)
+username   Text  NOT NULL  (login handle, unique per user)
 tags       Text[]  (e.g., ['Business traveler', 'Quiet', 'Pet owner'])
-categories Text[]  (parallel array, e.g., ['Travel Style', 'Preference', 'Lifestyle'])
+categories Text[]  (parallel array, e.g., ['Travel Style', 'Trip Purpose', 'Priorities & Preferences'])
 updated_at Timestamp
 UNIQUE (user_id)
 ```
@@ -141,7 +142,7 @@ UNIQUE (user_id)
 ```
 id               UUID  PK
 eg_property_id   Text  FK → Description_PROC
-user_id          UUID  (nullable — anonymous session)
+user_id          UUID  (nullable — username-session user when available)
 raw_text         Text
 ai_polished_text Text
 sentiment_score  Float  (nullable — not yet computed)
@@ -167,6 +168,8 @@ created_at         Timestamp
 |---|---|---|---|
 | `POST` | `/api/ai-polish` | ✅ Live | Takes `rawText`, returns `polishedText` via GPT-4o |
 | `POST` | `/api/reviews/follow-up` | ✅ Live | Runs 4-Layer Engine, returns 1-2 follow-up question objects |
+| `POST` | `/api/session/login` | ✅ Live | Takes `username`, restores or creates a stable user session |
+| `POST` | `/api/session/logout` | ✅ Live | Clears `parc_user_id` and `parc_username` cookies |
 
 ---
 
@@ -174,17 +177,17 @@ created_at         Timestamp
 
 | Feature | Status | Notes |
 |---|---|---|
-| Persona Tagging (Onboarding) | ✅ Complete | 27 presets + custom tags, saved to `User_Personas` |
+| Persona Tagging (Onboarding) | ✅ Complete | 55 curated presets across 6 groups + custom tags, saved to `User_Personas` |
 | Review Similarity Badge | ✅ Complete | Semantic clustering, inferred from `lob` + rating dimensions |
 | Hotel Browsing & Detail | ✅ Complete | 4-tab detail page, all `Description_PROC` fields rendered |
 | Review Feed | ✅ Complete | Paginated 20/page, sub-ratings, date, LOB badge |
 | Review Submission | ✅ Complete | Quick Tags, Q&A carousel, voice input, AI Polish, submit |
 | 4-Layer Follow-Up Engine | ✅ Complete | All 4 layers live, LLM question gen with fallback |
 | Follow-Up UI | ✅ Complete | Slider, Agreement, QuickTag widgets with voice NLP |
-| Middleware / Session | ✅ Complete | Anonymous UUID cookie, onboarding redirect |
+| Proxy / Session | ✅ Complete | Username login, stable user ID cookies, onboarding redirect |
 | FollowUp_Answers persistence | ⚠️ Partial | Table exists, UI collects answers, not yet written to DB |
 | Sentiment Scoring | ⚠️ Partial | Column exists in `Review_Submissions`, always NULL |
-| User Authentication | ❌ Not Started | Anonymous only — Supabase Auth not yet integrated |
+| User Authentication | ⚠️ Partial | Username-only session login is live; Supabase Auth is not yet integrated |
 | Review Filtering / Sorting | ❌ Not Started | Reviews displayed in date DESC order only |
 | Hotel Search | ❌ Not Started | No full-text search on hotels or reviews |
 

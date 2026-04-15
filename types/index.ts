@@ -3,6 +3,7 @@
 export interface UserPersona {
   id: string;
   user_id: string;
+  username: string;
   tags: string[];
   categories: string[];
   updated_at: string;

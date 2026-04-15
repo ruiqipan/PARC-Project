@@ -1,9 +1,27 @@
-import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import PersonaTagger from '@/components/onboarding/PersonaTagger';
+import { createServerClient } from '@/lib/supabase';
+import { getSession } from '@/lib/session';
 
 export default async function OnboardingPage() {
-  // Cookie is set by middleware before this page renders
-  const store = await cookies();
-  const userId = store.get('parc_anon_uid')?.value ?? '';
-  return <PersonaTagger userId={userId} />;
+  const session = await getSession();
+
+  if (!session) {
+    redirect('/login');
+  }
+
+  const supabase = createServerClient();
+  const { data: persona } = await supabase
+    .from('User_Personas')
+    .select('tags, username')
+    .eq('user_id', session.userId)
+    .maybeSingle();
+
+  return (
+    <PersonaTagger
+      userId={session.userId}
+      username={persona?.username ?? session.username}
+      initialSelectedTags={persona?.tags ?? []}
+    />
+  );
 }

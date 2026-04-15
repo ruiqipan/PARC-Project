@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition, KeyboardEvent } from 'react';
+import { useState, useTransition, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, Plus, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -20,45 +20,85 @@ const PRESET_GROUPS: { heading: string; items: TagDef[] }[] = [
     heading: 'Travel Style',
     items: [
       { tag: 'Business traveler', category: 'Travel Style' },
-      { tag: 'Solo traveler',     category: 'Travel Style' },
-      { tag: 'Family traveler',   category: 'Travel Style' },
-      { tag: 'Backpacker',        category: 'Travel Style' },
-      { tag: 'Luxury traveler',   category: 'Travel Style' },
+      { tag: 'Solo traveler', category: 'Travel Style' },
+      { tag: 'Family traveler', category: 'Travel Style' },
+      { tag: 'Couple traveler', category: 'Travel Style' },
+      { tag: 'Group traveler', category: 'Travel Style' },
+      { tag: 'Backpacker', category: 'Travel Style' },
+      { tag: 'Budget traveler', category: 'Travel Style' },
+      { tag: 'Luxury traveler', category: 'Travel Style' },
+      { tag: 'Road tripper', category: 'Travel Style' },
+      { tag: 'Long-stay traveler', category: 'Travel Style' },
+    ],
+  },
+  {
+    heading: 'Trip Purpose',
+    items: [
+      { tag: 'Tourist', category: 'Trip Purpose' },
+      { tag: 'Weekend getaway', category: 'Trip Purpose' },
+      { tag: 'Event traveler', category: 'Trip Purpose' },
+      { tag: 'Convention attendee', category: 'Trip Purpose' },
+      { tag: 'Wellness traveler', category: 'Trip Purpose' },
+      { tag: 'Adventure traveler', category: 'Trip Purpose' },
+      { tag: 'Digital nomad', category: 'Trip Purpose' },
+      { tag: 'Remote worker', category: 'Trip Purpose' },
     ],
   },
   {
     heading: 'Accessibility',
     items: [
-      { tag: 'Wheelchair user',  category: 'Accessibility' },
-      { tag: 'Guide dog owner',  category: 'Accessibility' },
+      { tag: 'Wheelchair user', category: 'Accessibility' },
+      { tag: 'Mobility aid user', category: 'Accessibility' },
       { tag: 'Visual impairment', category: 'Accessibility' },
       { tag: 'Hearing impairment', category: 'Accessibility' },
-      { tag: 'Mobility aid user', category: 'Accessibility' },
+      { tag: 'Step-free access needed', category: 'Accessibility' },
+      { tag: 'Elevator access needed', category: 'Accessibility' },
+      { tag: 'Accessible bathroom needed', category: 'Accessibility' },
     ],
   },
   {
-    heading: 'Health & Wellness',
+    heading: 'Sensory & Health',
     items: [
-      { tag: 'Neurodivergent',        category: 'Health & Wellness' },
-      { tag: 'Chronic illness',        category: 'Health & Wellness' },
-      { tag: 'Dietary restrictions',   category: 'Health & Wellness' },
+      { tag: 'Neurodivergent', category: 'Sensory & Health' },
+      { tag: 'Sensory-sensitive', category: 'Sensory & Health' },
+      { tag: 'Light sleeper', category: 'Sensory & Health' },
+      { tag: 'Chronic illness', category: 'Sensory & Health' },
+      { tag: 'Dietary restrictions', category: 'Sensory & Health' },
+      { tag: 'Fragrance-sensitive', category: 'Sensory & Health' },
+      { tag: 'Air quality sensitive', category: 'Sensory & Health' },
     ],
   },
   {
-    heading: 'Lifestyle',
+    heading: 'Companions & Household',
     items: [
-      { tag: 'Pet owner',      category: 'Lifestyle' },
-      { tag: 'Eco-conscious',  category: 'Lifestyle' },
-      { tag: 'Remote worker',  category: 'Lifestyle' },
+      { tag: 'Pet owner', category: 'Companions & Household' },
+      { tag: 'Guide dog owner', category: 'Companions & Household' },
+      { tag: 'Traveling with baby/toddler', category: 'Companions & Household' },
+      { tag: 'Traveling with kids', category: 'Companions & Household' },
+      { tag: 'Traveling with teens', category: 'Companions & Household' },
+      { tag: 'Senior traveler', category: 'Companions & Household' },
+      { tag: 'Caregiver traveler', category: 'Companions & Household' },
     ],
   },
   {
-    heading: 'Preferences',
+    heading: 'Priorities & Preferences',
     items: [
-      { tag: 'Quiet',              category: 'Preference' },
-      { tag: 'Adventure seeker',   category: 'Preference' },
-      { tag: 'Culture enthusiast', category: 'Preference' },
-      { tag: 'Foodie',             category: 'Preference' },
+      { tag: 'Quiet', category: 'Priorities & Preferences' },
+      { tag: 'Safety-conscious', category: 'Priorities & Preferences' },
+      { tag: 'Cleanliness-focused', category: 'Priorities & Preferences' },
+      { tag: 'Fast WiFi', category: 'Priorities & Preferences' },
+      { tag: 'Breakfast-first', category: 'Priorities & Preferences' },
+      { tag: 'Parking needed', category: 'Priorities & Preferences' },
+      { tag: 'Transit-first', category: 'Priorities & Preferences' },
+      { tag: 'Walkable area', category: 'Priorities & Preferences' },
+      { tag: 'Spacious room', category: 'Priorities & Preferences' },
+      { tag: 'Strong AC', category: 'Priorities & Preferences' },
+      { tag: 'Gym access', category: 'Priorities & Preferences' },
+      { tag: 'Pool access', category: 'Priorities & Preferences' },
+      { tag: 'Spa & relaxation', category: 'Priorities & Preferences' },
+      { tag: 'Eco-conscious', category: 'Priorities & Preferences' },
+      { tag: 'Foodie', category: 'Priorities & Preferences' },
+      { tag: 'Culture enthusiast', category: 'Priorities & Preferences' },
     ],
   },
 ];
@@ -67,25 +107,57 @@ const PRESET_GROUPS: { heading: string; items: TagDef[] }[] = [
 
 interface PersonaTaggerProps {
   userId: string;
+  username: string;
+  initialSelectedTags?: string[];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function PersonaTagger({ userId }: PersonaTaggerProps) {
+const PRESET_TAGS = new Set(PRESET_GROUPS.flatMap(group => group.items.map(item => item.tag)));
+
+export default function PersonaTagger({
+  userId,
+  username,
+  initialSelectedTags = [],
+}: PersonaTaggerProps) {
   const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelectedTags));
+  const [customTags, setCustomTags] = useState<string[]>(() =>
+    initialSelectedTags.filter(tag => !PRESET_TAGS.has(tag))
+  );
   const [inputValue, setInputValue] = useState('');
+  const [searchValue, setSearchValue] = useState('');
   const [isPending, startTransition] = useTransition();
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const trimmedSearch = searchValue.trim().toLowerCase();
+  const visibleGroups = PRESET_GROUPS
+    .map(group => {
+      if (!trimmedSearch) {
+        return group;
+      }
+
+      const groupMatches = group.heading.toLowerCase().includes(trimmedSearch);
+      return {
+        ...group,
+        items: groupMatches
+          ? group.items
+          : group.items.filter(item => item.tag.toLowerCase().includes(trimmedSearch)),
+      };
+    })
+    .filter(group => group.items.length > 0);
 
   // Toggle a preset tag on/off
   function toggleTag(tag: string) {
     setSelected(prev => {
       const next = new Set(prev);
-      next.has(tag) ? next.delete(tag) : next.add(tag);
+      if (next.has(tag)) {
+        next.delete(tag);
+      } else {
+        next.add(tag);
+      }
       return next;
     });
+    setStatus('idle');
   }
 
   // Add a custom tag from the input field
@@ -98,6 +170,7 @@ export default function PersonaTagger({ userId }: PersonaTaggerProps) {
     setCustomTags(prev => [...prev, trimmed]);
     setSelected(prev => new Set(prev).add(trimmed));
     setInputValue('');
+    setStatus('idle');
   }
 
   function handleInputKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -114,6 +187,7 @@ export default function PersonaTagger({ userId }: PersonaTaggerProps) {
       next.delete(tag);
       return next;
     });
+    setStatus('idle');
   }
 
   // Build parallel arrays and upsert into User_Personas
@@ -133,7 +207,13 @@ export default function PersonaTagger({ userId }: PersonaTaggerProps) {
     const { error } = await supabase
       .from('User_Personas')
       .upsert(
-        { user_id: userId, tags: tagsArr, categories: categoriesArr, updated_at: new Date().toISOString() },
+        {
+          user_id: userId,
+          username,
+          tags: tagsArr,
+          categories: categoriesArr,
+          updated_at: new Date().toISOString(),
+        },
         { onConflict: 'user_id' }
       );
 
@@ -179,11 +259,27 @@ export default function PersonaTagger({ userId }: PersonaTaggerProps) {
           Select any tags that describe you. We use these to surface reviews from
           travelers with similar needs.
         </motion.p>
+        <p className="mt-3 text-sm font-medium text-[#003580]">
+          Signed in as {username}
+        </p>
       </div>
 
       {/* Tag groups */}
       <div className="w-full max-w-2xl space-y-7">
-        {PRESET_GROUPS.map((group, gi) => (
+        <section>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+            Find Tags
+          </h2>
+          <input
+            type="text"
+            value={searchValue}
+            onChange={e => setSearchValue(e.target.value)}
+            placeholder="Search tags or categories…"
+            className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0071c2] focus:border-transparent bg-white placeholder-gray-400"
+          />
+        </section>
+
+        {visibleGroups.map((group, gi) => (
           <motion.section
             key={group.heading}
             initial={{ opacity: 0, y: 14 }}
@@ -209,11 +305,17 @@ export default function PersonaTagger({ userId }: PersonaTaggerProps) {
           </motion.section>
         ))}
 
+        {trimmedSearch && visibleGroups.length === 0 && (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-5 text-sm text-gray-500">
+            No preset tags matched your search.
+          </div>
+        )}
+
         {/* Custom tags section */}
         <motion.section
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, delay: PRESET_GROUPS.length * 0.06 }}
+          transition={{ duration: 0.35, delay: visibleGroups.length * 0.06 }}
         >
           <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
             Custom Tags

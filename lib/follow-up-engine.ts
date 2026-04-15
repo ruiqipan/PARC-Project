@@ -107,19 +107,75 @@ const AMENITY_TO_ATTRIBUTE: Record<string, string> = {
 // most to them. Semantic matching: "Quiet" and "Sleep Quality" both map to noise.
 
 const PERSONA_ATTRIBUTES: Record<string, string[]> = {
-  'Business traveler':  ['wifi', 'check_in', 'parking', 'noise'],
-  'Pet owner':          ['pet_policy'],
-  'Guide dog owner':    ['accessibility', 'pet_policy'],
-  'Wheelchair user':    ['accessibility', 'check_in'],
-  'Neurodivergent':     ['noise', 'accessibility', 'cleanliness'],
-  'Families':           ['pool', 'breakfast', 'safety', 'noise'],
-  'Tourist':            ['transit', 'noise', 'breakfast'],
-  'Quiet':              ['noise', 'air_conditioning'],
-  'Sleep quality':      ['noise', 'air_conditioning', 'cleanliness'],
-  'Luxury':             ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
-  'Budget traveler':    ['parking', 'breakfast', 'wifi'],
-  'Solo traveler':      ['safety', 'noise', 'check_in'],
-  'Eco-conscious':      ['transit'],
+  'Business traveler': ['wifi', 'check_in', 'parking', 'noise'],
+  'Convention attendee': ['wifi', 'check_in', 'parking', 'noise'],
+  'Digital nomad': ['wifi', 'check_in', 'parking', 'noise'],
+  'Remote worker': ['wifi', 'check_in', 'parking', 'noise'],
+  'Fast WiFi': ['wifi', 'check_in', 'parking', 'noise'],
+  'Long-stay traveler': ['wifi', 'cleanliness', 'air_conditioning', 'check_in'],
+
+  'Backpacker': ['parking', 'breakfast', 'wifi'],
+  'Budget traveler': ['parking', 'breakfast', 'wifi'],
+
+  'Luxury traveler': ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+  'Wellness traveler': ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+  'Pool access': ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+  'Gym access': ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+  'Spa & relaxation': ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+  'Couple traveler': ['noise', 'cleanliness', 'breakfast_quality'],
+
+  'Family traveler': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Group traveler': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Traveling with baby/toddler': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Traveling with kids': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Traveling with teens': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Caregiver traveler': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Senior traveler': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+  'Families': ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
+
+  'Pet owner': ['pet_policy'],
+  'Guide dog owner': ['pet_policy', 'accessibility'],
+
+  'Wheelchair user': ['accessibility', 'check_in', 'safety'],
+  'Mobility aid user': ['accessibility', 'check_in', 'safety'],
+  'Visual impairment': ['accessibility', 'check_in', 'safety'],
+  'Hearing impairment': ['accessibility', 'check_in', 'safety'],
+  'Step-free access needed': ['accessibility', 'check_in', 'safety'],
+  'Elevator access needed': ['accessibility', 'check_in', 'safety'],
+  'Accessible bathroom needed': ['accessibility', 'check_in', 'safety'],
+
+  'Neurodivergent': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Sensory-sensitive': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Light sleeper': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Quiet': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Strong AC': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Air quality sensitive': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Fragrance-sensitive': ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+
+  'Safety-conscious': ['safety', 'check_in'],
+  'Cleanliness-focused': ['cleanliness', 'safety'],
+  'Chronic illness': ['cleanliness', 'safety'],
+
+  'Tourist': ['transit', 'noise', 'breakfast'],
+  'Weekend getaway': ['transit', 'noise', 'breakfast'],
+  'Event traveler': ['transit', 'noise', 'breakfast'],
+  'Adventure traveler': ['transit', 'noise', 'breakfast'],
+  'Culture enthusiast': ['transit', 'noise', 'breakfast'],
+
+  'Road tripper': ['parking', 'check_in'],
+  'Parking needed': ['parking', 'check_in'],
+  'Transit-first': ['transit', 'noise'],
+  'Walkable area': ['transit', 'noise'],
+
+  'Breakfast-first': ['breakfast', 'breakfast_quality'],
+  'Foodie': ['breakfast', 'breakfast_quality'],
+  'Dietary restrictions': ['breakfast', 'breakfast_quality'],
+
+  // The engine has no room-size attribute yet, so bias toward general room quality signals.
+  'Spacious room': ['cleanliness', 'air_conditioning'],
+
+  'Solo traveler': ['safety', 'noise', 'check_in'],
+  'Eco-conscious': ['transit'],
 };
 
 // ─── Layer 4: Deal-Breaker Risk Weights ───────────────────────────────────────

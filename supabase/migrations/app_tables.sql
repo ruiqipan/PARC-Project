@@ -11,11 +11,15 @@
 CREATE TABLE IF NOT EXISTS "User_Personas" (
     id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id    UUID NOT NULL,
+    username   TEXT NOT NULL,
     tags       TEXT[] NOT NULL DEFAULT '{}',
     categories TEXT[] NOT NULL DEFAULT '{}',
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT one_persona_per_user UNIQUE (user_id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS user_personas_username_lower_idx
+    ON "User_Personas"(LOWER(username));
 
 ALTER TABLE "User_Personas"
     DROP CONSTRAINT IF EXISTS tags_categories_same_length;

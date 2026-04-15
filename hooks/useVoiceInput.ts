@@ -150,16 +150,21 @@ export interface UseVoiceInputReturn {
 }
 
 export function useVoiceInput(): UseVoiceInputReturn {
-  const [isListening, setIsListening]   = useState(false);
-  const [transcript, setTranscript]     = useState('');
-  const [isUnsupported, setUnsupported] = useState(false);
+  const hasSpeechRecognition =
+    typeof window !== 'undefined' &&
+    Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
+
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [runtimeUnsupported, setRuntimeUnsupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const isUnsupported = !hasSpeechRecognition || runtimeUnsupported;
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!hasSpeechRecognition) return;
+
     const Ctor = window.SpeechRecognition ?? window.webkitSpeechRecognition;
     if (!Ctor) {
-      setUnsupported(true);
       return;
     }
 
@@ -179,7 +184,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
 
     rec.onerror = (e: SpeechRecognitionErrorEvent) => {
       // "no-speech" is benign; surface others as unsupported.
-      if (e.error !== 'no-speech') setUnsupported(true);
+      if (e.error !== 'no-speech') setRuntimeUnsupported(true);
       setIsListening(false);
     };
 
@@ -193,7 +198,7 @@ export function useVoiceInput(): UseVoiceInputReturn {
       rec.onend    = null;
       try { rec.stop(); } catch { /* already stopped */ }
     };
-  }, []);
+  }, [hasSpeechRecognition]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListening) return;
