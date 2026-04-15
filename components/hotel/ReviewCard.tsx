@@ -133,6 +133,14 @@ export default function ReviewCard({
     [userTags, resolvedReviewerTags],
   );
 
+  // Top 3 most relevant reviewer tags: matched tags first, then fill with unmatched
+  const topReviewerTags = useMemo(() => {
+    if (resolvedReviewerTags.length === 0) return [];
+    const matchedTags = matches.map(m => m.reviewerTag);
+    const unmatched = resolvedReviewerTags.filter(t => !matchedTags.includes(t));
+    return [...matchedTags, ...unmatched].slice(0, 3);
+  }, [resolvedReviewerTags, matches]);
+
   return (
     <article className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
@@ -165,10 +173,10 @@ export default function ReviewCard({
             )}
           </div>
 
-          {/* Reviewer persona tags */}
-          {resolvedReviewerTags.length > 0 && (
+          {/* Reviewer persona tags — top 3 most relevant to viewing user */}
+          {topReviewerTags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
-              {resolvedReviewerTags.map(tag => (
+              {topReviewerTags.map(tag => (
                 <span
                   key={tag}
                   className="inline-block text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100"
