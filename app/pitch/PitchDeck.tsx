@@ -124,24 +124,13 @@ const DecayChart = () => {
   );
 };
 
-// Grid: 3 cols × 4 rows, evenly across the full screen (card overlays naturally via z-index)
 const BACKGROUND_COMMENTS = [
-  // Row 1  y≈8%
-  { text: '"WiFi solid for back-to-back video calls."',      tag: 'Business Traveler',  x: '2%',  y: '8%',  delay: 0.10 },
-  { text: '"Quietest hotel room I\'ve stayed in."',          tag: 'Light Sleeper',       x: '34%', y: '8%',  delay: 0.20 },
-  { text: '"Dog welcomed with treats at check-in."',         tag: 'Pet Owner',           x: '66%', y: '8%',  delay: 0.30 },
-  // Row 2  y≈32%
-  { text: '"Desk and chair were genuinely ergonomic."',      tag: 'Remote Worker',       x: '2%',  y: '32%', delay: 0.15 },
-  { text: '"Check-in at midnight — completely seamless."',   tag: 'Late Arrival',        x: '34%', y: '32%', delay: 0.25 },
-  { text: '"Ramp access clearly signed from the street."',   tag: 'Wheelchair User',     x: '66%', y: '32%', delay: 0.35 },
-  // Row 3  y≈58%
-  { text: '"Staff spoke Mandarin — huge relief for us."',    tag: 'International Guest', x: '2%',  y: '58%', delay: 0.20 },
-  { text: '"Pool open till 10pm, kids were thrilled."',      tag: 'Family Traveler',     x: '34%', y: '58%', delay: 0.40 },
-  { text: '"Free parking made the road trip stress-free."',  tag: 'Road Tripper',        x: '66%', y: '58%', delay: 0.30 },
-  // Row 4  y≈82%
-  { text: '"Solid gluten-free options at breakfast."',       tag: 'Dietary Needs',       x: '2%',  y: '82%', delay: 0.25 },
-  { text: '"Spa booking was seamless through the app."',     tag: 'Wellness Traveler',   x: '34%', y: '82%', delay: 0.45 },
-  { text: '"Safety info was current and well-displayed."',   tag: 'Solo Traveler',       x: '66%', y: '82%', delay: 0.35 },
+  { text: '"WiFi was fast enough for back-to-back video calls."', tag: 'Business Traveler', x: '5%',  y: '12%', delay: 0.2 },
+  { text: '"Surprisingly quiet — slept better than at home."',    tag: 'Light Sleeper',     x: '60%', y: '8%',  delay: 0.5 },
+  { text: '"They actually welcomed our dog at check-in!"',        tag: 'Pet Owner',         x: '72%', y: '55%', delay: 0.8 },
+  { text: '"Check-in at 11pm was completely seamless."',          tag: 'Late Arrival',      x: '3%',  y: '62%', delay: 0.4 },
+  { text: '"Pool was open and warm — kids loved it."',            tag: 'Family Traveler',   x: '30%', y: '82%', delay: 0.9 },
+  { text: '"Breakfast had solid gluten-free options."',           tag: 'Dietary Needs',     x: '68%', y: '78%', delay: 0.6 },
 ];
 
 // --- Final slide: scroll-in → card clears → floating comments → click Book Now → black + slogan ---
@@ -200,14 +189,14 @@ function FinalSlide() {
           <motion.div
             key={i}
             initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: [0, 0.82, 0.72, 0.82], y: [6, 0, -4, 0] }}
-            transition={{ opacity: { duration: 1.0, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
-            className="absolute"
+            animate={{ opacity: [0, 0.75, 0.65, 0.75], y: [8, 0, -4, 0] }}
+            transition={{ opacity: { duration: 1.2, delay: c.delay }, y: { duration: 5, delay: c.delay, repeat: Infinity, ease: 'easeInOut' } }}
+            className="absolute max-w-[220px]"
             style={{ left: c.x, top: c.y }}
           >
-            <div className="bg-white/10 border border-white/22 backdrop-blur-sm rounded-2xl px-3.5 py-2 flex items-center gap-2.5 whitespace-nowrap">
-              <span className="text-[8px] px-2 py-0.5 bg-blue-500/40 text-blue-200 rounded-full font-semibold shrink-0">{c.tag}</span>
-              <p className="text-white/80 text-[11px] italic">{c.text}</p>
+            <div className="bg-white/8 border border-white/15 backdrop-blur-sm rounded-2xl px-3 py-2">
+              <p className="text-white/75 text-[11px] leading-relaxed italic mb-1.5">{c.text}</p>
+              <span className="text-[9px] px-2 py-0.5 bg-blue-500/25 text-blue-300 rounded-full font-medium">{c.tag}</span>
             </div>
           </motion.div>
         ))}
