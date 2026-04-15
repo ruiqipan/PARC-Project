@@ -245,6 +245,32 @@ function SemanticSlider({
   );
 }
 
+async function parseTranscriptWithAI(
+  transcript: string,
+  question: FollowUpQuestion,
+): Promise<number | null> {
+  const body: Record<string, string> = {
+    transcript,
+    ui_type: question.ui_type,
+    feature_name: question.feature_name,
+    prompt: getQuestionPrompt(question),
+  };
+  if (question.ui_type === 'Slider') {
+    body.left_label  = question.left_label;
+    body.right_label = question.right_label;
+  }
+
+  const res = await fetch('/api/reviews/nlp-parse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) return null;
+  const data = (await res.json()) as { quantitative_value?: number | null };
+  return typeof data.quantitative_value === 'number' ? data.quantitative_value : null;
+}
+
 export default function FollowUpCard({ questions, onComplete, onDismiss }: Props) {
   const [step, setStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -254,6 +280,7 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
   const [manualSelection, setManualSelection] = useState<boolean[]>(() => questions.map(() => false));
   const [showTextInput, setShowTextInput] = useState<boolean[]>(() => questions.map(() => false));
   const [showAssistMenu, setShowAssistMenu] = useState<boolean[]>(() => questions.map(() => false));
+  const [aiParsingStep, setAiParsingStep] = useState<number | null>(null);
 
   const manualSelectionRef = useRef(manualSelection);
   const autoAdvanceRef = useRef<number | null>(null);
@@ -342,8 +369,30 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
 
     if (!isListening) {
       voiceBaseTextRef.current = combined;
+
+      // Fire AI parse to replace keyword heuristic with a real semantic score.
+      const capturedStep = voiceStepRef.current;
+      const question = questions[capturedStep];
+      if (combined.trim() && question && question.ui_type !== 'QuickTag') {
+        setAiParsingStep(capturedStep);
+        parseTranscriptWithAI(combined, question)
+          .then(value => {
+            if (value !== null) {
+              setAnswers(prev => {
+                const next = [...prev];
+                // Only apply if user hasn't manually overridden since voice stopped.
+                if (!manualSelectionRef.current[capturedStep]) {
+                  next[capturedStep] = { ...next[capturedStep], quantitative_value: value };
+                }
+                return next;
+              });
+            }
+          })
+          .catch(() => { /* silently fall back to keyword heuristic result */ })
+          .finally(() => setAiParsingStep(null));
+      }
     }
-  }, [isListening, step, transcript, updateNoteForStep]);
+  }, [isListening, step, transcript, updateNoteForStep, questions]);
 
   async function submitAnswers(nextAnswers: FollowUpAnswer[]) {
     clearPendingAdvance();
@@ -742,7 +791,13 @@ export default function FollowUpCard({ questions, onComplete, onDismiss }: Props
                         </span>
                       ) : null}
 
-                      {inferredFromNote && answerSummary ? (
+                      {!isListening && aiParsingStep === step ? (
+                        <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-600">
+                          AI analyzing...
+                        </span>
+                      ) : null}
+
+                      {inferredFromNote && answerSummary && aiParsingStep !== step ? (
                         <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
                           Inferred answer: {answerSummary}
                         </span>
