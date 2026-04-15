@@ -4,7 +4,6 @@ import { useState, useTransition, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, PencilLine, Plus, UserRound, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 // ─── Tag definitions (PRD Feature 1) ──────────────────────────────────────────
@@ -287,24 +286,18 @@ export default function PersonaTagger({
                   </p>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex shrink-0">
                   <button
                     type="button"
                     onClick={() => {
                       setStatus('idle');
                       setIsEditing(true);
                     }}
-                    className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#003580] transition hover:bg-blue-50"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2 text-sm font-semibold text-[#003580] transition hover:bg-blue-50"
                   >
                     <PencilLine size={16} />
                     Edit Tags
                   </button>
-                  <Link
-                    href="/"
-                    className="inline-flex items-center rounded-xl border border-white/25 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
-                  >
-                    Browse Hotels
-                  </Link>
                 </div>
               </div>
             </div>
