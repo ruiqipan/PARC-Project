@@ -872,6 +872,247 @@ export default function PitchDeck() {
         </div>
       </Section>
 
+      {/* Slide 7: From Reviews to Reliable Reality — cinematic narrative */}
+      <section className="min-h-screen w-full flex flex-col items-center justify-center snap-start relative overflow-hidden bg-black">
+        {/* Background: aerial city nightscape */}
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center"
+          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1920&q=80')` }}
+        >
+          <div className="absolute inset-0 bg-black/65" />
+        </div>
+
+        {/* Animated data-flow SVG overlay */}
+        <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none opacity-30" preserveAspectRatio="xMidYMid slice">
+          {[
+            { x1: '10%', y1: '20%', x2: '40%', y2: '55%', delay: 0 },
+            { x1: '40%', y1: '55%', x2: '70%', y2: '30%', delay: 0.4 },
+            { x1: '70%', y1: '30%', x2: '90%', y2: '65%', delay: 0.8 },
+            { x1: '20%', y1: '75%', x2: '55%', y2: '45%', delay: 0.3 },
+            { x1: '55%', y1: '45%', x2: '80%', y2: '80%', delay: 0.7 },
+          ].map((l, i) => (
+            <motion.line
+              key={i}
+              x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2}
+              stroke="#3b82f6" strokeWidth="1"
+              initial={{ pathLength: 0, opacity: 0 }}
+              whileInView={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 1.5, delay: l.delay, repeat: Infinity, repeatDelay: 3 }}
+            />
+          ))}
+          {[
+            { cx: '10%', cy: '20%' }, { cx: '40%', cy: '55%' },
+            { cx: '70%', cy: '30%' }, { cx: '90%', cy: '65%' },
+            { cx: '20%', cy: '75%' }, { cx: '55%', cy: '45%' },
+            { cx: '80%', cy: '80%' },
+          ].map((c, i) => (
+            <motion.circle
+              key={i} cx={c.cx} cy={c.cy} r="4"
+              fill="#3b82f6"
+              initial={{ opacity: 0, scale: 0 }}
+              whileInView={{ opacity: [0, 1, 0.6], scale: [0, 1.4, 1] }}
+              transition={{ duration: 1, delay: i * 0.15, repeat: Infinity, repeatDelay: 2.5 }}
+            />
+          ))}
+        </svg>
+
+        {/* Content */}
+        <div className="relative z-20 max-w-5xl w-full px-8 md:px-20 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7 }}
+            className="text-blue-400 font-bold uppercase tracking-widest text-xs mb-8"
+          >
+            Property Knowledge Engine
+          </motion.div>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1 }}
+            className="text-5xl md:text-7xl font-bold text-white mb-8 tracking-tight leading-tight"
+          >
+            From Reviews<br />to Reliable Reality
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.25 }}
+            className="text-xl md:text-2xl text-white/60 mb-16 max-w-3xl mx-auto leading-relaxed"
+          >
+            让评论不只是表达，而是成为一个持续校准现实的系统。
+          </motion.p>
+
+          {/* Three narrative pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+            {[
+              {
+                icon: '🔍',
+                title: '识别缺失与衰减',
+                body: '系统持续监测每个属性的信息健康度，在数据腐化前主动触发补全流程。',
+              },
+              {
+                icon: '🎯',
+                title: '精准路由问题',
+                body: '将最小成本的追问，精准路由给最合适的用户——只问对的人、只问对的事。',
+              },
+              {
+                icon: '🔄',
+                title: '答案结构化反哺',
+                body: '每一条回答都被转化为结构化、可更新的决策信息，驱动知识库持续进化。',
+              },
+            ].map((item, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 + i * 0.12 }}
+                className="bg-white/8 border border-white/15 backdrop-blur-sm rounded-3xl p-6"
+              >
+                <div className="text-3xl mb-4">{item.icon}</div>
+                <h4 className="text-white font-bold mb-2 text-base">{item.title}</h4>
+                <p className="text-white/55 text-sm leading-relaxed">{item.body}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Ecosystem loop visual */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 0.8 }}
+            className="mt-14 flex items-center justify-center gap-3 flex-wrap"
+          >
+            {['评论', '→', '追问', '→', '答案', '→', '结构化数据', '→', '更好的决策'].map((item, i) => (
+              <motion.span
+                key={i}
+                initial={{ opacity: 0 }}
+                whileInView={{ opacity: 1 }}
+                transition={{ delay: 0.9 + i * 0.08 }}
+                className={item === '→'
+                  ? 'text-blue-400 font-bold text-lg'
+                  : 'text-white/80 text-sm font-semibold bg-white/10 border border-white/20 px-3 py-1.5 rounded-full'}
+              >
+                {item}
+              </motion.span>
+            ))}
+          </motion.div>
+        </div>
+
+        <motion.div
+          animate={{ y: [0, 10, 0] }}
+          transition={{ duration: 2, repeat: Infinity, delay: 1.5 }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-white/30 z-20"
+        >
+          <ChevronDown className="w-8 h-8" />
+        </motion.div>
+      </section>
+
+      {/* Slide 8: Final — Know before you go */}
+      <section className="min-h-screen w-full flex flex-col items-center justify-center snap-start relative overflow-hidden bg-black">
+        {/* Background: global hotel distribution / earth at night */}
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center"
+          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=1920&q=80')` }}
+        >
+          <div className="absolute inset-0 bg-black/70" />
+        </div>
+
+        {/* Pulsing global data points */}
+        <svg className="absolute inset-0 w-full h-full z-10 pointer-events-none" preserveAspectRatio="xMidYMid slice">
+          {[
+            { cx: '18%', cy: '35%' }, { cx: '32%', cy: '28%' }, { cx: '48%', cy: '42%' },
+            { cx: '62%', cy: '25%' }, { cx: '75%', cy: '38%' }, { cx: '85%', cy: '55%' },
+            { cx: '25%', cy: '60%' }, { cx: '55%', cy: '65%' }, { cx: '70%', cy: '62%' },
+          ].map((p, i) => (
+            <motion.circle
+              key={i} cx={p.cx} cy={p.cy} r="3"
+              fill="#60a5fa"
+              animate={{ opacity: [0.3, 1, 0.3], scale: [1, 1.8, 1] }}
+              transition={{ duration: 2 + i * 0.3, repeat: Infinity, delay: i * 0.4 }}
+            />
+          ))}
+        </svg>
+
+        {/* Booking moment: blurry → clear card */}
+        <div className="relative z-20 max-w-4xl w-full px-8 md:px-20 flex flex-col items-center gap-12">
+          <motion.div
+            initial={{ filter: 'blur(12px)', opacity: 0.4 }}
+            whileInView={{ filter: 'blur(0px)', opacity: 1 }}
+            transition={{ duration: 1.4, delay: 0.3, ease: 'easeOut' }}
+            className="w-full max-w-lg bg-white/10 border border-white/20 backdrop-blur-md rounded-3xl p-7"
+          >
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-white font-bold text-lg">Omni Interlocken Hotel</div>
+                <div className="text-white/50 text-sm">Broomfield, Colorado · ★ 4.6</div>
+              </div>
+              <div className="bg-green-500/20 border border-green-400/40 rounded-xl px-3 py-1.5 text-green-400 text-xs font-bold">
+                Verified ✓
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-5">
+              {[
+                { label: 'WiFi', score: '4.8', fresh: true },
+                { label: 'Noise', score: '4.2', fresh: true },
+                { label: 'Check-in', score: '4.9', fresh: true },
+              ].map((attr, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8 + i * 0.1 }}
+                  className="bg-white/10 rounded-2xl p-3 text-center"
+                >
+                  <div className="text-white/50 text-[10px] mb-1">{attr.label}</div>
+                  <div className="text-white font-black text-xl">{attr.score}</div>
+                  {attr.fresh && <div className="text-green-400 text-[9px] mt-1 font-mono">● Fresh</div>}
+                </motion.div>
+              ))}
+            </div>
+            <motion.button
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              className="w-full bg-blue-600 hover:bg-blue-500 transition-colors text-white font-bold py-3.5 rounded-2xl text-base"
+            >
+              Book Now
+            </motion.button>
+          </motion.div>
+
+          {/* Final line */}
+          <div className="text-center">
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.8, delay: 1.6 }}
+              className="text-white/40 text-sm uppercase tracking-widest mb-6 font-mono"
+            >
+              We don&apos;t just help people choose better stays.<br />
+              We help platforms understand reality — continuously, accurately, and at scale.
+            </motion.p>
+            <motion.h1
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1, delay: 2.0, ease: 'easeOut' }}
+              className="text-5xl md:text-7xl font-bold text-white tracking-tight"
+            >
+              Know before you go.
+            </motion.h1>
+            <motion.p
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 2.6 }}
+              className="mt-6 text-white/30 text-sm italic tracking-widest uppercase"
+            >
+              PRISM by PARC Group
+            </motion.p>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="py-12 text-center text-slate-400 bg-white border-t border-slate-200 snap-start">
         <p className="text-sm italic tracking-widest uppercase">PRISM by PARC Group</p>
