@@ -47,11 +47,17 @@ PARC Hotels is a persona-aware hotel review experience designed to make review r
 1. User opens the Reviews tab.
 2. User can draft with quick tags, seeded Q&A prompts, voice input, manual text, and optional AI polish.
 3. Review is inserted into `Review_Submissions`.
-4. A deterministic follow-up engine returns:
-   - 1 question for positive reviews,
-   - 2 questions for non-positive reviews.
-5. User answers via slider, agreement scale, or voice-assisted input.
-6. Responses are written to `FollowUp_Answers`.
+4. A persona-aware follow-up engine selects topics from:
+   - the submitted review text,
+   - the user's persona tags,
+   - hotel/review evidence and freshness signals.
+5. Follow-up questions open in a modal popup instead of inline under the review box.
+6. Output behavior:
+   - negative reviews -> 1-2 questions anchored to the negative experience in that review,
+   - positive reviews -> 1-2 questions that can combine the user's review with persona-relevant topics.
+7. Question wording is generated on the spot at request time, while topic selection remains deterministic and grounded.
+8. User answers via slider, yes / neutral / no agreement controls, typed note, or voice-assisted input.
+9. Responses are written to `FollowUp_Answers`.
 
 ## 4. Feature Requirements
 
@@ -95,31 +101,58 @@ PARC Hotels is a persona-aware hotel review experience designed to make review r
 - AI Polish rewrites raw notes into a cleaner review without inventing facts.
 - Translation is available per review card in the review feed.
 
-### Feature 5: Deterministic Follow-Up Engine
+### Feature 5: Persona-First Follow-Up Engine
 **Status:** Implemented
 
-The live engine is deterministic and heuristic-driven. It ranks property information gaps using four layers:
+The live engine now combines deterministic topic selection with runtime question generation.
 
-1. **Memory decay:** attributes not refreshed recently lose confidence.
-2. **Blind spots:** claimed amenities/policies without reviewer confirmation are boosted.
-3. **Persona boosts:** user tags raise the priority of relevant attributes.
-4. **Decision-risk ranking:** attributes are weighted by expected decision impact.
+Topic selection behavior:
+
+1. Detect topics mentioned in the submitted review.
+2. Build a persona topic bundle from the user's tags.
+3. Create candidate topics in four buckets:
+   - `intersection`
+   - `review_only`
+   - `blind_spot`
+   - `persona_only`
+4. Rank candidates primarily by:
+   - topic bucket,
+   - hotel grounding,
+   - freshness / decay,
+   - decision risk.
+
+Current topic coverage includes the original hotel attributes plus newer persona-oriented topics such as:
+
+- `work_environment`
+- `extra_bed_policy`
+- `crib_setup`
+- `pet_fees`
+- `pet_restrictions`
+- `elevator_access`
+- `bathroom_accessibility`
+- `room_comfort`
+
+Grounding rules:
+
+- A topic is eligible when it is supported by the submitted review, the user's persona, and real hotel/review/policy evidence.
+- Evidence text remains grounded in hotel description text, policy fields, amenities, or actual review evidence.
+- If live question generation fails, the engine falls back to deterministic built-in phrasing.
 
 Output behavior:
 
-- Positive review -> 1 verification-style question
-- Non-positive review -> 2 questions:
-  - severity / agreement
-  - likely reason isolation
+- Positive review -> 1-2 follow-up questions that can broaden into persona-relevant, evidence-backed topics.
+- Non-positive review -> 1-2 follow-up questions anchored to the same negative experience from the submitted review.
 
 ### Feature 6: Low-Friction Follow-Up UI
 **Status:** Implemented
 
+- Centered modal popup after review submission
 - Slider questions for continuous attributes
-- Agreement scale for confirm/deny statements
+- Yes / Neutral / No agreement controls for confirm/deny statements
+- Optional text and voice input behind an expandable `+` action
 - Voice-to-slider and voice-to-agreement mapping via heuristics
 - Animated multi-step UI
-- Completion state after answer submission
+- Modal dismisses immediately after successful answer submission
 
 Current note:
 
@@ -145,6 +178,8 @@ Current note:
 - `gpt-4o`
   - `/api/ai-polish`
   - `/api/reviews/translate`
+- `gpt-4o-mini`
+  - runtime follow-up question wording inside `lib/follow-up-engine.ts`
 - `gpt-5-nano`
   - `/api/reviews/enrich`
 - `text-embedding-3-small`
@@ -203,7 +238,7 @@ Current note:
 | `POST` | `/api/ai-polish` | Rewrite raw review notes conservatively |
 | `POST` | `/api/reviews/translate` | Translate review text to target language |
 | `POST` | `/api/reviews/enrich` | Fetch or generate cached title/tag enrichments |
-| `POST` | `/api/reviews/follow-up` | Run the deterministic follow-up engine |
+| `POST` | `/api/reviews/follow-up` | Select follow-up topics and generate live follow-up question text |
 | `POST` | `/api/reviews/follow-up/answers` | Persist follow-up answers |
 
 ## 8. Non-Goals / Deferred Work
@@ -219,7 +254,7 @@ Current note:
 - Session identity is username-based and cookie-backed, which is sufficient for the demo but weaker than true auth.
 - Homepage review counts are currently computed with per-hotel count queries, which is simple but not optimal at larger scale.
 - A legacy `/api/personas` route still exists in the repo but is not the active onboarding write path.
-- `QuickTag` follow-up support exists in UI/types, but persistence schema still effectively targets the currently emitted `Slider` and `Agreement` flows.
+- `QuickTag` follow-up support exists in UI/types, but the live engine still emits only `Slider` and `Agreement`.
 - The checked-in schema references for `Review_Submissions` lag behind the active write path, which already expects `username` and `rating` columns.
 
 ## 10. Success Criteria for This Prototype

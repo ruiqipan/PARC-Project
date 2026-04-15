@@ -30,8 +30,9 @@
  *   Non-positive     → 2 questions: (a) confirm severity, (b) isolate root cause
  */
 
+import OpenAI from 'openai';
 import { createServerClient } from '@/lib/supabase';
-import { AMENITY_LABELS, parseArrayField, stripHtml } from '@/lib/utils';
+import { AMENITY_LABELS, parseArrayField, parseHtmlItems, stripHtml } from '@/lib/utils';
 import type {
   AgreementQuestion,
   FollowUpAnswer,
@@ -53,6 +54,8 @@ interface AttributeGap {
   decay_days?: number;
   freshness_score?: number;   // 0–1; low = stale
   amenity_claimed?: string;
+  hotel_grounding_score?: number;
+  review_mention_count?: number;
 }
 
 interface ReviewSubmissionRow {
@@ -93,24 +96,92 @@ interface ReviewEvidence {
   representative_quote: string | null;
 }
 
+interface AttributeContextSignal {
+  review_evidence: ReviewEvidence;
+  has_hotel_claim: boolean;
+  matters_to_user: boolean;
+  grounding_score: number;
+  priority_multiplier: number;
+}
+
+type TopicSource = 'intersection' | 'review_only' | 'persona_only' | 'blind_spot';
+
+interface TopicDefinition {
+  key: string;
+  attribute: string;
+  persona_tags: string[];
+  review_keywords: string[];
+  supported_evidence_sources: Array<'reviews' | 'hotel_description' | 'amenity' | 'policy'>;
+  hotel_fields?: Array<keyof Hotel>;
+  hotel_amenities?: string[];
+}
+
+type PersonaTopicBundle = Record<string, string[]>;
+
+interface CandidateTopic {
+  topic_key: string;
+  attribute: string;
+  topic_source: TopicSource;
+  review_mentions: number;
+  review_negative_mentions: number;
+  review_positive_mentions: number;
+  persona_match_count: number;
+  hotel_grounding_score: number;
+  freshness_score: number;
+  risk_score: number;
+  blind_spot: boolean;
+  gap?: AttributeGap;
+}
+
+interface DynamicQuestionCopyRequest {
+  id: string;
+  attribute: string;
+  ui_type: FollowUpQuestion['ui_type'];
+  path: 'positive_primary' | 'negative_primary' | 'negative_narrowing';
+  topic_source: TopicSource;
+  review_sentiment: ReviewSentiment;
+  user_tags: string[];
+  submitted_review: string;
+  evidence_text: string | null;
+  reason: string;
+  review_mentions: number;
+  review_negative_mentions: number;
+}
+
+interface GeneratedQuestionCopy {
+  id: string;
+  primary_text?: string | null;
+  narrowing_text?: string | null;
+}
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
 // ─── Attribute metadata ───────────────────────────────────────────────────────
 
 const ATTRIBUTE_KEYWORDS: Record<string, string[]> = {
   parking:           ['parking', 'garage', 'valet', 'car park', 'parked', 'lot'],
   breakfast:         ['breakfast', 'morning meal', 'buffet', 'continental', 'brunch'],
   wifi:              ['wifi', 'wi-fi', 'internet', 'wireless', 'connection speed', 'bandwidth', 'signal'],
+  work_environment:  ['desk', 'workspace', 'workstation', 'laptop', 'video call', 'zoom', 'meeting', 'business center', 'co-working', 'coworking', 'outlet', 'power outlet'],
   pet_policy:        ['dog', 'pet', 'animal', 'cat', 'puppy', 'leash', 'pet-friendly', 'pet friendly'],
+  pet_fees:          ['pet fee', 'dog fee', 'pet charge', 'pet deposit', 'charge for dog', 'fee for dog'],
+  pet_restrictions:  ['pet restriction', 'breed restriction', 'size limit', 'weight limit', 'dogs only', 'pet rule'],
   check_in:          ['check-in', 'check in', 'check out', 'checkout', 'arrival', 'late arrival', 'front desk', 'reception'],
   safety:            ['safe', 'safety', 'security', 'secure', 'lock', 'keycard', 'emergency'],
   pool:              ['pool', 'swimming', 'swim', 'hot tub', 'jacuzzi', 'heated pool'],
   gym:               ['gym', 'fitness', 'workout', 'exercise', 'treadmill', 'weights'],
   noise:             ['quiet', 'noise', 'noisy', 'loud', 'soundproof', 'silent', 'disturb'],
   cleanliness:       ['clean', 'dirty', 'hygiene', 'spotless', 'stain', 'dusty', 'smell', 'odor', 'odour', 'mold', 'mildew'],
+  room_comfort:      ['comfortable', 'comfort', 'comfortable bed', 'mattress', 'pillows', 'sleep quality', 'cozy', 'spacious room'],
   transit:           ['subway', 'metro', 'bus', 'train', 'station', 'transit', 'walk to', 'walkable'],
   accessibility:     ['wheelchair', 'accessible', 'elevator', 'disabled', 'ramp', 'mobility', 'ada', 'step-free'],
+  elevator_access:   ['elevator', 'lift', 'elevator access'],
+  bathroom_accessibility: ['accessible bathroom', 'roll-in shower', 'grab bar', 'shower seat', 'bathroom accessibility', 'accessible shower'],
   air_conditioning:  ['ac', 'air conditioning', 'air-conditioning', 'hvac', 'cooling', 'thermostat'],
   construction:      ['construction', 'renovation', 'drilling', 'building work', 'scaffolding'],
   breakfast_quality: ['eggs', 'pastry', 'coffee quality', 'breakfast selection', 'buffet variety'],
+  extra_bed_policy:  ['extra bed', 'rollaway', 'additional bed', 'sofa bed', 'bed for child'],
+  crib_setup:        ['crib', 'cot', 'pack and play', 'pack-and-play', 'baby bed'],
 };
 
 /**
@@ -126,14 +197,22 @@ const DECAY_HALF_LIFE_DAYS: Record<string, number> = {
   breakfast_quality: 14,
   parking:           30,
   wifi:              30,
+  work_environment:  45,
   pool:              45,
   check_in:          60,
   gym:               60,
   noise:             60,
+  extra_bed_policy:  90,
+  crib_setup:        90,
   air_conditioning:  90,
   pet_policy:        90,
+  pet_fees:          90,
+  pet_restrictions:  120,
   safety:            90,
   accessibility:     180,
+  elevator_access:   180,
+  bathroom_accessibility: 180,
+  room_comfort:      60,
   transit:           365,
 };
 
@@ -141,10 +220,14 @@ const AMENITY_TO_ATTRIBUTE: Record<string, string> = {
   free_parking:       'parking',
   breakfast_available:'breakfast',
   breakfast_included: 'breakfast',
+  business_services:  'work_environment',
   internet:           'wifi',
   pool:               'pool',
   kids_pool:          'pool',
+  crib:               'crib_setup',
+  extra_bed:          'extra_bed_policy',
   fitness_equipment:  'gym',
+  elevator:           'elevator_access',
   soundproof_room:    'noise',
   no_smoking:         'safety',
   frontdesk_24_hour:  'check_in',
@@ -153,52 +236,52 @@ const AMENITY_TO_ATTRIBUTE: Record<string, string> = {
   ac:                 'air_conditioning',
 };
 
-const PERSONA_ATTRIBUTES: Record<string, string[]> = {
-  'Business traveler':              ['wifi', 'check_in', 'parking', 'noise'],
-  'Convention attendee':            ['wifi', 'check_in', 'parking', 'noise'],
-  'Digital nomad':                  ['wifi', 'check_in', 'parking', 'noise'],
-  'Remote worker':                  ['wifi', 'check_in', 'parking', 'noise'],
-  'Fast WiFi':                      ['wifi', 'check_in', 'parking', 'noise'],
-  'Long-stay traveler':             ['wifi', 'cleanliness', 'air_conditioning', 'check_in'],
-  Backpacker:                       ['parking', 'breakfast', 'wifi'],
-  'Budget traveler':                ['parking', 'breakfast', 'wifi'],
-  'Luxury traveler':                ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
-  'Wellness traveler':              ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
+const PERSONA_TOPIC_BUNDLES: PersonaTopicBundle = {
+  'Business traveler':              ['wifi', 'work_environment', 'check_in', 'parking', 'noise'],
+  'Convention attendee':            ['wifi', 'work_environment', 'check_in', 'parking', 'noise'],
+  'Digital nomad':                  ['wifi', 'work_environment', 'check_in', 'noise', 'room_comfort'],
+  'Remote worker':                  ['wifi', 'work_environment', 'check_in', 'noise', 'room_comfort'],
+  'Fast WiFi':                      ['wifi', 'work_environment'],
+  'Long-stay traveler':             ['wifi', 'work_environment', 'cleanliness', 'air_conditioning', 'room_comfort', 'check_in'],
+  Backpacker:                       ['parking', 'breakfast', 'wifi', 'check_in'],
+  'Budget traveler':                ['parking', 'breakfast', 'wifi', 'check_in'],
+  'Luxury traveler':                ['pool', 'gym', 'cleanliness', 'breakfast_quality', 'room_comfort'],
+  'Wellness traveler':              ['pool', 'gym', 'cleanliness', 'breakfast_quality', 'room_comfort'],
   'Pool access':                    ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
   'Gym access':                     ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
-  'Spa & relaxation':               ['pool', 'gym', 'cleanliness', 'breakfast_quality'],
-  'Couple traveler':                ['noise', 'cleanliness', 'breakfast_quality'],
-  'Family traveler':                ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Group traveler':                 ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Traveling with baby/toddler':    ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Traveling with kids':            ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Traveling with teens':           ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Caregiver traveler':             ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Senior traveler':                ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  Families:                         ['pool', 'breakfast', 'safety', 'noise', 'check_in'],
-  'Pet owner':                      ['pet_policy'],
-  'Guide dog owner':                ['pet_policy', 'accessibility'],
-  'Wheelchair user':                ['accessibility', 'check_in', 'safety'],
-  'Mobility aid user':              ['accessibility', 'check_in', 'safety'],
+  'Spa & relaxation':               ['pool', 'gym', 'cleanliness', 'breakfast_quality', 'room_comfort'],
+  'Couple traveler':                ['noise', 'cleanliness', 'breakfast_quality', 'room_comfort'],
+  'Family traveler':                ['cleanliness', 'extra_bed_policy', 'crib_setup', 'breakfast', 'noise', 'pool', 'check_in', 'safety'],
+  'Group traveler':                 ['cleanliness', 'extra_bed_policy', 'breakfast', 'noise', 'pool', 'check_in', 'safety'],
+  'Traveling with baby/toddler':    ['cleanliness', 'crib_setup', 'extra_bed_policy', 'breakfast', 'noise', 'check_in', 'safety'],
+  'Traveling with kids':            ['cleanliness', 'extra_bed_policy', 'crib_setup', 'breakfast', 'noise', 'pool', 'check_in', 'safety'],
+  'Traveling with teens':           ['cleanliness', 'extra_bed_policy', 'breakfast', 'noise', 'pool', 'check_in', 'safety'],
+  'Caregiver traveler':             ['cleanliness', 'extra_bed_policy', 'crib_setup', 'breakfast', 'noise', 'check_in', 'safety'],
+  'Senior traveler':                ['cleanliness', 'extra_bed_policy', 'check_in', 'safety', 'elevator_access', 'bathroom_accessibility'],
+  Families:                         ['cleanliness', 'extra_bed_policy', 'crib_setup', 'breakfast', 'noise', 'pool', 'check_in', 'safety'],
+  'Pet owner':                      ['pet_policy', 'pet_fees', 'pet_restrictions'],
+  'Guide dog owner':                ['pet_policy', 'pet_restrictions', 'accessibility', 'elevator_access', 'bathroom_accessibility'],
+  'Wheelchair user':                ['accessibility', 'elevator_access', 'bathroom_accessibility', 'check_in', 'safety'],
+  'Mobility aid user':              ['accessibility', 'elevator_access', 'bathroom_accessibility', 'check_in', 'safety'],
   'Visual impairment':              ['accessibility', 'check_in', 'safety'],
   'Hearing impairment':             ['accessibility', 'check_in', 'safety'],
-  'Step-free access needed':        ['accessibility', 'check_in', 'safety'],
-  'Elevator access needed':         ['accessibility', 'check_in', 'safety'],
-  'Accessible bathroom needed':     ['accessibility', 'check_in', 'safety'],
-  Neurodivergent:                   ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  'Sensory-sensitive':              ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  'Light sleeper':                  ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  Quiet:                            ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  'Strong AC':                      ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  'Air quality sensitive':          ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
-  'Fragrance-sensitive':            ['noise', 'air_conditioning', 'cleanliness', 'accessibility'],
+  'Step-free access needed':        ['accessibility', 'elevator_access', 'check_in', 'safety'],
+  'Elevator access needed':         ['elevator_access', 'accessibility', 'check_in'],
+  'Accessible bathroom needed':     ['bathroom_accessibility', 'accessibility', 'check_in'],
+  Neurodivergent:                   ['noise', 'air_conditioning', 'cleanliness', 'room_comfort', 'accessibility'],
+  'Sensory-sensitive':              ['noise', 'air_conditioning', 'cleanliness', 'room_comfort', 'accessibility'],
+  'Light sleeper':                  ['noise', 'air_conditioning', 'room_comfort', 'cleanliness'],
+  Quiet:                            ['noise', 'room_comfort', 'air_conditioning'],
+  'Strong AC':                      ['air_conditioning', 'room_comfort'],
+  'Air quality sensitive':          ['air_conditioning', 'cleanliness', 'room_comfort'],
+  'Fragrance-sensitive':            ['cleanliness', 'air_conditioning', 'room_comfort'],
   'Safety-conscious':               ['safety', 'check_in'],
-  'Cleanliness-focused':            ['cleanliness', 'safety'],
-  'Chronic illness':                ['cleanliness', 'safety'],
+  'Cleanliness-focused':            ['cleanliness', 'room_comfort', 'safety'],
+  'Chronic illness':                ['cleanliness', 'room_comfort', 'safety', 'bathroom_accessibility'],
   Tourist:                          ['transit', 'noise', 'breakfast'],
-  'Weekend getaway':                ['transit', 'noise', 'breakfast'],
-  'Event traveler':                 ['transit', 'noise', 'breakfast'],
-  'Adventure traveler':             ['transit', 'noise', 'breakfast'],
+  'Weekend getaway':                ['transit', 'noise', 'breakfast', 'room_comfort'],
+  'Event traveler':                 ['transit', 'noise', 'breakfast', 'check_in'],
+  'Adventure traveler':             ['transit', 'noise', 'breakfast', 'parking'],
   'Culture enthusiast':             ['transit', 'noise', 'breakfast'],
   'Road tripper':                   ['parking', 'check_in'],
   'Parking needed':                 ['parking', 'check_in'],
@@ -207,8 +290,8 @@ const PERSONA_ATTRIBUTES: Record<string, string[]> = {
   'Breakfast-first':                ['breakfast', 'breakfast_quality'],
   Foodie:                           ['breakfast', 'breakfast_quality'],
   'Dietary restrictions':           ['breakfast', 'breakfast_quality'],
-  'Spacious room':                  ['cleanliness', 'air_conditioning'],
-  'Solo traveler':                  ['safety', 'noise', 'check_in'],
+  'Spacious room':                  ['room_comfort', 'cleanliness', 'air_conditioning'],
+  'Solo traveler':                  ['safety', 'noise', 'check_in', 'wifi'],
   'Eco-conscious':                  ['transit'],
 };
 
@@ -224,33 +307,49 @@ const RISK_WEIGHTS: Record<string, number> = {
   pet_policy:         8,
   cleanliness:        8,
   wifi:               7,
+  work_environment:   7,
   parking:            7,
   construction:       7,
   noise:              6,
   breakfast:          5,
+  extra_bed_policy:   6,
+  crib_setup:         6,
   pool:               4,
   transit:            4,
   air_conditioning:   3,
+  room_comfort:       5,
   gym:                3,
   breakfast_quality:  2,
+  elevator_access:    8,
+  bathroom_accessibility: 9,
+  pet_fees:           6,
+  pet_restrictions:   7,
 };
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
   parking:           'parking',
   breakfast:         'breakfast',
   wifi:              'WiFi',
+  work_environment:  'working environment',
   pet_policy:        'pet-friendliness',
+  pet_fees:          'pet fees',
+  pet_restrictions:  'pet restrictions',
   check_in:          'check-in',
   safety:            'safety',
   pool:              'pool',
   gym:               'gym',
   noise:             'noise level',
   cleanliness:       'cleanliness',
+  room_comfort:      'room comfort',
   transit:           'location convenience',
   accessibility:     'accessibility',
+  elevator_access:   'elevator access',
+  bathroom_accessibility: 'bathroom accessibility',
   air_conditioning:  'air conditioning',
   construction:      'construction disruption',
   breakfast_quality: 'breakfast quality',
+  extra_bed_policy:  'extra bed policy',
+  crib_setup:        'crib setup',
 };
 
 const ATTRIBUTE_STAT_PHRASES: Record<string, { positive: string; negative: string }> = {
@@ -261,18 +360,58 @@ const ATTRIBUTE_STAT_PHRASES: Record<string, { positive: string; negative: strin
   breakfast: { positive: 'said breakfast felt dependable', negative: 'said breakfast fell short' },
   breakfast_quality: { positive: 'said breakfast quality felt strong', negative: 'said breakfast quality fell short' },
   check_in: { positive: 'said check-in felt smooth', negative: 'said check-in felt difficult' },
+  work_environment: { positive: 'said the hotel worked well for focused work', negative: 'said working from the hotel felt difficult' },
   pet_policy: { positive: 'said the hotel felt pet-friendly', negative: 'said the pet experience felt restrictive' },
+  pet_fees: { positive: 'said pet fees felt clear and manageable', negative: 'said pet fees felt frustrating or unclear' },
+  pet_restrictions: { positive: 'said the pet rules felt workable', negative: 'said pet restrictions got in the way' },
   accessibility: { positive: 'said accessibility worked well in practice', negative: 'said accessibility gaps created friction' },
+  elevator_access: { positive: 'said elevator access felt dependable', negative: 'said elevator access created friction' },
+  bathroom_accessibility: { positive: 'said bathroom accessibility worked in practice', negative: 'said bathroom accessibility created friction' },
   air_conditioning: { positive: 'said temperature control felt easy', negative: 'said temperature control was hard to manage' },
   safety: { positive: 'said the property felt secure', negative: 'said the property felt less secure than expected' },
   pool: { positive: 'said the pool was worth using', negative: 'said the pool experience disappointed' },
   gym: { positive: 'said the gym felt usable', negative: 'said the gym felt underwhelming' },
   transit: { positive: 'said getting around felt convenient', negative: 'said getting around took more effort than expected' },
   construction: { positive: 'said construction was barely noticeable', negative: 'said construction was disruptive' },
+  room_comfort: { positive: 'said the room felt comfortable', negative: 'said room comfort fell short' },
+  extra_bed_policy: { positive: 'said extra bed arrangements felt clear', negative: 'said extra bed arrangements created friction' },
+  crib_setup: { positive: 'said crib setup felt straightforward', negative: 'said crib setup was harder than expected' },
 };
 
 const REVIEW_STAT_MIN_MENTIONS = 5;
 const REVIEW_STAT_MIN_CONSENSUS = 0.75;
+const GENERIC_STALE_ATTRIBUTE_PENALTY = 0.58;
+const HOTEL_CLAIM_PRIORITY_BONUS = 0.22;
+const LIGHT_REVIEW_SIGNAL_BONUS = 0.12;
+const STRONG_REVIEW_SIGNAL_BONUS = 0.2;
+const PERSONA_GROUNDING_BONUS = 0.08;
+const FOLLOW_UP_GENERATION_MODEL = 'gpt-4o-mini';
+
+const FOLLOW_UP_COPY_SYSTEM_PROMPT = `You write hotel review follow-up questions at request time.
+
+Return valid JSON only.
+
+Rules:
+1. Never invent facts, amenities, complaints, or praise beyond the provided data.
+2. If the review sentiment is negative, the follow-up must stay anchored to the user's negative experience in the submitted review.
+3. If the review sentiment is positive, the follow-up may integrate the user's persona tags with the provided review and evidence.
+4. Use the provided evidence_text and reason only as grounding. Do not quote or cite anything not included there.
+5. Keep each question concise and natural.
+6. For Slider questions, primary_text must be a direct question.
+7. For Agreement questions, primary_text must be a short statement suitable for a Yes / Neutral / No response.
+8. narrowing_text should only be present for negative_narrowing items, and it must stay on the same topic as the negative experience.
+9. Do not add markdown, numbering, or explanations.
+
+Return this shape:
+{
+  "items": [
+    {
+      "id": "string",
+      "primary_text": "string",
+      "narrowing_text": "string | null"
+    }
+  ]
+}`;
 
 const POSITIVE_SENTIMENT_WORDS = [
   'great', 'good', 'excellent', 'amazing', 'wonderful', 'smooth', 'friendly',
@@ -296,6 +435,197 @@ const POSITIVE_CUES = [
   'great', 'good', 'excellent', 'amazing', 'clean', 'quiet', 'smooth',
   'stable', 'reliable', 'easy', 'convenient', 'comfortable', 'friendly',
 ];
+
+const TOPIC_DEFINITION_INPUTS: Record<string, Omit<TopicDefinition, 'persona_tags'>> = {
+  wifi: {
+    key: 'wifi',
+    attribute: 'wifi',
+    review_keywords: ATTRIBUTE_KEYWORDS.wifi,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_internet'],
+    hotel_amenities: ['internet'],
+  },
+  work_environment: {
+    key: 'work_environment',
+    attribute: 'work_environment',
+    review_keywords: ATTRIBUTE_KEYWORDS.work_environment,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_business_services', 'property_amenity_internet', 'property_amenity_conveniences'],
+    hotel_amenities: ['business_services', 'internet'],
+  },
+  parking: {
+    key: 'parking',
+    attribute: 'parking',
+    review_keywords: ATTRIBUTE_KEYWORDS.parking,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_parking'],
+    hotel_amenities: ['free_parking'],
+  },
+  breakfast: {
+    key: 'breakfast',
+    attribute: 'breakfast',
+    review_keywords: ATTRIBUTE_KEYWORDS.breakfast,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_food_and_drink'],
+    hotel_amenities: ['breakfast_available', 'breakfast_included'],
+  },
+  breakfast_quality: {
+    key: 'breakfast_quality',
+    attribute: 'breakfast_quality',
+    review_keywords: ATTRIBUTE_KEYWORDS.breakfast_quality,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_food_and_drink'],
+    hotel_amenities: ['breakfast_available', 'breakfast_included'],
+  },
+  check_in: {
+    key: 'check_in',
+    attribute: 'check_in',
+    review_keywords: ATTRIBUTE_KEYWORDS.check_in,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy'],
+    hotel_fields: ['property_description', 'check_in_instructions'],
+    hotel_amenities: ['frontdesk_24_hour'],
+  },
+  cleanliness: {
+    key: 'cleanliness',
+    attribute: 'cleanliness',
+    review_keywords: ATTRIBUTE_KEYWORDS.cleanliness,
+    supported_evidence_sources: ['reviews', 'hotel_description'],
+    hotel_fields: ['property_description'],
+  },
+  noise: {
+    key: 'noise',
+    attribute: 'noise',
+    review_keywords: ATTRIBUTE_KEYWORDS.noise,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'area_description'],
+    hotel_amenities: ['soundproof_room'],
+  },
+  safety: {
+    key: 'safety',
+    attribute: 'safety',
+    review_keywords: ATTRIBUTE_KEYWORDS.safety,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy'],
+    hotel_fields: ['property_description', 'know_before_you_go', 'check_in_instructions'],
+    hotel_amenities: ['no_smoking'],
+  },
+  pool: {
+    key: 'pool',
+    attribute: 'pool',
+    review_keywords: ATTRIBUTE_KEYWORDS.pool,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_outdoor', 'property_amenity_things_to_do'],
+    hotel_amenities: ['pool', 'kids_pool', 'hot_tub'],
+  },
+  accessibility: {
+    key: 'accessibility',
+    attribute: 'accessibility',
+    review_keywords: ATTRIBUTE_KEYWORDS.accessibility,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_accessibility'],
+    hotel_amenities: ['elevator'],
+  },
+  elevator_access: {
+    key: 'elevator_access',
+    attribute: 'elevator_access',
+    review_keywords: ATTRIBUTE_KEYWORDS.elevator_access,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_accessibility'],
+    hotel_amenities: ['elevator'],
+  },
+  bathroom_accessibility: {
+    key: 'bathroom_accessibility',
+    attribute: 'bathroom_accessibility',
+    review_keywords: ATTRIBUTE_KEYWORDS.bathroom_accessibility,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy'],
+    hotel_fields: ['property_description', 'property_amenity_accessibility'],
+  },
+  pet_policy: {
+    key: 'pet_policy',
+    attribute: 'pet_policy',
+    review_keywords: ATTRIBUTE_KEYWORDS.pet_policy,
+    supported_evidence_sources: ['reviews', 'policy'],
+    hotel_fields: ['pet_policy'],
+  },
+  pet_fees: {
+    key: 'pet_fees',
+    attribute: 'pet_fees',
+    review_keywords: ATTRIBUTE_KEYWORDS.pet_fees,
+    supported_evidence_sources: ['reviews', 'policy'],
+    hotel_fields: ['pet_policy'],
+  },
+  pet_restrictions: {
+    key: 'pet_restrictions',
+    attribute: 'pet_restrictions',
+    review_keywords: ATTRIBUTE_KEYWORDS.pet_restrictions,
+    supported_evidence_sources: ['reviews', 'policy'],
+    hotel_fields: ['pet_policy'],
+  },
+  extra_bed_policy: {
+    key: 'extra_bed_policy',
+    attribute: 'extra_bed_policy',
+    review_keywords: ATTRIBUTE_KEYWORDS.extra_bed_policy,
+    supported_evidence_sources: ['reviews', 'policy', 'amenity'],
+    hotel_fields: ['children_and_extra_bed_policy', 'property_amenity_family_friendly'],
+    hotel_amenities: ['extra_bed'],
+  },
+  crib_setup: {
+    key: 'crib_setup',
+    attribute: 'crib_setup',
+    review_keywords: ATTRIBUTE_KEYWORDS.crib_setup,
+    supported_evidence_sources: ['reviews', 'policy', 'amenity'],
+    hotel_fields: ['children_and_extra_bed_policy', 'property_amenity_family_friendly'],
+    hotel_amenities: ['crib'],
+  },
+  air_conditioning: {
+    key: 'air_conditioning',
+    attribute: 'air_conditioning',
+    review_keywords: ATTRIBUTE_KEYWORDS.air_conditioning,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_conveniences'],
+    hotel_amenities: ['ac'],
+  },
+  room_comfort: {
+    key: 'room_comfort',
+    attribute: 'room_comfort',
+    review_keywords: ATTRIBUTE_KEYWORDS.room_comfort,
+    supported_evidence_sources: ['reviews', 'hotel_description'],
+    hotel_fields: ['property_description'],
+  },
+  transit: {
+    key: 'transit',
+    attribute: 'transit',
+    review_keywords: ATTRIBUTE_KEYWORDS.transit,
+    supported_evidence_sources: ['reviews', 'hotel_description'],
+    hotel_fields: ['area_description', 'property_description'],
+  },
+  gym: {
+    key: 'gym',
+    attribute: 'gym',
+    review_keywords: ATTRIBUTE_KEYWORDS.gym,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'amenity'],
+    hotel_fields: ['property_description', 'property_amenity_spa'],
+    hotel_amenities: ['fitness_equipment', 'spa'],
+  },
+  construction: {
+    key: 'construction',
+    attribute: 'construction',
+    review_keywords: ATTRIBUTE_KEYWORDS.construction,
+    supported_evidence_sources: ['reviews', 'hotel_description', 'policy'],
+    hotel_fields: ['property_description', 'know_before_you_go'],
+  },
+};
+
+const TOPIC_DEFINITIONS: Record<string, TopicDefinition> = Object.fromEntries(
+  Object.entries(TOPIC_DEFINITION_INPUTS).map(([key, definition]) => [
+    key,
+    {
+      ...definition,
+      persona_tags: Object.entries(PERSONA_TOPIC_BUNDLES)
+        .filter(([, topics]) => topics.includes(key))
+        .map(([tag]) => tag),
+    },
+  ]),
+) as Record<string, TopicDefinition>;
 
 const SLIDER_CONFIG: Record<
   string,
@@ -339,6 +669,15 @@ const SLIDER_CONFIG: Record<
       { keywords: ['fast', 'stable', 'reliable', 'strong', 'smooth'], direction: 'right' },
     ],
   },
+  work_environment: {
+    prompt: () => 'How workable did the room or shared spaces feel for laptop time, calls, or focused work?',
+    left_label: 'Hard to Work',
+    right_label: 'Work-Friendly',
+    nlp_hints: [
+      { keywords: ['cramped', 'no desk', 'no outlet', 'awkward', 'hard to work'], direction: 'left' },
+      { keywords: ['desk', 'workspace', 'comfortable', 'productive', 'good for work'], direction: 'right' },
+    ],
+  },
   breakfast_quality: {
     prompt: () => 'How would you rate the breakfast quality and variety?',
     left_label: 'Disappointing',
@@ -355,6 +694,15 @@ const SLIDER_CONFIG: Record<
     nlp_hints: [
       { keywords: ['hot', 'warm', 'humid', 'broken', 'loud'], direction: 'left' },
       { keywords: ['cool', 'comfortable', 'steady', 'worked', 'easy'], direction: 'right' },
+    ],
+  },
+  room_comfort: {
+    prompt: () => 'How comfortable did the room setup feel for relaxing or sleeping?',
+    left_label: 'Uncomfortable',
+    right_label: 'Comfortable',
+    nlp_hints: [
+      { keywords: ['uncomfortable', 'hard bed', 'bad mattress', 'stiff', 'couldn’t sleep'], direction: 'left' },
+      { keywords: ['comfortable', 'cozy', 'good bed', 'slept well', 'relaxing'], direction: 'right' },
     ],
   },
   construction: {
@@ -401,6 +749,16 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[], context:
         { keywords: ['slow', 'speed', 'buffer', 'lag'], statement: 'Slow speed was the main reason the WiFi felt unreliable.' },
         { keywords: ['drop', 'disconnect', 'signal', 'weak'], statement: 'Dropouts or weak in-room signal were the main WiFi problem.' },
       ], 'Reliability was the bigger WiFi issue than the login or setup process.'),
+      context,
+    ),
+  work_environment: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'work_environment_reason',
+      pickReasonStatement(text, [
+        { keywords: ['desk', 'workspace', 'table'], statement: 'Lack of a usable desk or workspace was the main work setup problem.' },
+        { keywords: ['outlet', 'plug', 'power'], statement: 'Power access made working from the hotel harder than expected.' },
+        { keywords: ['call', 'meeting', 'noise'], statement: 'Noise or privacy made calls and focused work harder than expected.' },
+      ], 'The hotel was harder to work from than it first appeared.'),
       context,
     ),
   parking: (text, _userTags, context) =>
@@ -452,6 +810,24 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[], context:
       ], 'The pet experience felt more restricted than welcoming.'),
       context,
     ),
+  pet_fees: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'pet_fees_reason',
+      pickReasonStatement(text, [
+        { keywords: ['fee', 'charge', 'cost', 'deposit'], statement: 'Unexpected cost was the main pet-travel frustration.' },
+        { keywords: ['unclear', 'confusing'], statement: 'The pet-fee policy was harder to understand than it should have been.' },
+      ], 'Pet fees felt more frustrating than straightforward.'),
+      context,
+    ),
+  pet_restrictions: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'pet_restrictions_reason',
+      pickReasonStatement(text, [
+        { keywords: ['size', 'weight', 'breed'], statement: 'Size or breed rules created the biggest pet-travel friction.' },
+        { keywords: ['rule', 'restrict', 'policy'], statement: 'Policy restrictions mattered more than cost.' },
+      ], 'The pet rules felt harder to work around than expected.'),
+      context,
+    ),
   accessibility: (text, _userTags, context) =>
     buildAgreementQuestion(
       'accessibility_reason',
@@ -462,6 +838,24 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[], context:
       ], 'The accessibility problem affected actual usability, not just convenience.'),
       context,
     ),
+  elevator_access: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'elevator_access_reason',
+      pickReasonStatement(text, [
+        { keywords: ['wait', 'slow', 'crowded'], statement: 'Elevator waits or reliability were the main issue.' },
+        { keywords: ['stairs', 'step'], statement: 'Needing to work around stairs made access harder than expected.' },
+      ], 'Elevator access affected actual usability, not just convenience.'),
+      context,
+    ),
+  bathroom_accessibility: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'bathroom_accessibility_reason',
+      pickReasonStatement(text, [
+        { keywords: ['shower', 'bathroom'], statement: 'Bathroom layout was the biggest accessibility issue.' },
+        { keywords: ['grab bar', 'seat'], statement: 'Missing or awkward support features made the bathroom harder to use.' },
+      ], 'Bathroom accessibility affected real usability during the stay.'),
+      context,
+    ),
   air_conditioning: (text, _userTags, context) =>
     buildAgreementQuestion(
       'air_conditioning_reason',
@@ -470,6 +864,33 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[], context:
         { keywords: ['loud', 'noise', 'rattle'], statement: 'AC noise was as big a problem as the temperature itself.' },
         { keywords: ['control', 'thermostat'], statement: 'The thermostat or controls made the AC hard to manage.' },
       ], 'The AC issue felt persistent, not just a brief fluctuation.'),
+      context,
+    ),
+  extra_bed_policy: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'extra_bed_policy_reason',
+      pickReasonStatement(text, [
+        { keywords: ['extra bed', 'rollaway', 'sofa bed'], statement: 'The extra bed setup was harder to arrange than expected.' },
+        { keywords: ['unclear', 'policy', 'confusing'], statement: 'The extra bed policy was less clear than it should have been.' },
+      ], 'The extra bed policy or setup created more friction than expected.'),
+      context,
+    ),
+  crib_setup: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'crib_setup_reason',
+      pickReasonStatement(text, [
+        { keywords: ['crib', 'cot', 'pack and play'], statement: 'Getting a crib confirmed or delivered took more effort than expected.' },
+        { keywords: ['unclear', 'policy'], statement: 'The crib setup policy was less clear than it should have been.' },
+      ], 'Crib setup was harder to arrange than expected.'),
+      context,
+    ),
+  room_comfort: (text, _userTags, context) =>
+    buildAgreementQuestion(
+      'room_comfort_reason',
+      pickReasonStatement(text, [
+        { keywords: ['bed', 'mattress', 'pillow'], statement: 'Bed comfort drove most of the room-comfort issue.' },
+        { keywords: ['space', 'cramped', 'tight'], statement: 'The room layout felt less comfortable than expected.' },
+      ], 'Room comfort issues affected the stay more than a tiny one-off detail.'),
       context,
     ),
 };
@@ -538,6 +959,69 @@ function summariseDuration(days: number): string {
 
 function getAttributeLabel(attribute: string): string {
   return ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ');
+}
+
+function getTopicDefinition(topic: string): TopicDefinition {
+  return TOPIC_DEFINITIONS[topic] ?? {
+    key: topic,
+    attribute: topic,
+    persona_tags: [],
+    review_keywords: ATTRIBUTE_KEYWORDS[topic] ?? [],
+    supported_evidence_sources: ['reviews', 'hotel_description'],
+  };
+}
+
+function getPersonaTopicCounts(userTags: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const tag of userTags) {
+    for (const topic of PERSONA_TOPIC_BUNDLES[tag] ?? []) {
+      counts.set(topic, (counts.get(topic) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function getMatchingPersonaTagsForTopic(topic: string, userTags: string[]): string[] {
+  return userTags.filter(tag => (PERSONA_TOPIC_BUNDLES[tag] ?? []).includes(topic));
+}
+
+function getHotelFieldItems(hotel: Hotel, field: keyof Hotel): string[] {
+  const value = hotel[field];
+  if (!value) return [];
+
+  if (field === 'property_description' || field === 'area_description') {
+    return splitDisplaySentences(String(value));
+  }
+
+  const htmlItems = parseHtmlItems(value);
+  if (htmlItems.length > 0) {
+    return htmlItems;
+  }
+
+  return parseArrayField(value).flatMap(item => splitDisplaySentences(item));
+}
+
+function getHotelTopicTexts(hotel: Hotel, topic: string, gap?: AttributeGap): string[] {
+  const definition = getTopicDefinition(topic);
+  const items = new Set<string>();
+
+  for (const field of definition.hotel_fields ?? []) {
+    for (const item of getHotelFieldItems(hotel, field)) {
+      if (item) items.add(item);
+    }
+  }
+
+  for (const amenity of parseArrayField(hotel.popular_amenities_list)) {
+    const amenityKey = amenity.toLowerCase();
+    const matchesDefinition = (definition.hotel_amenities ?? []).includes(amenityKey);
+    const matchesGap = gap?.amenity_claimed?.toLowerCase() === amenityKey;
+    const matchesAttribute = AMENITY_TO_ATTRIBUTE[amenityKey] === topic;
+    if (matchesDefinition || matchesGap || matchesAttribute) {
+      items.add(AMENITY_LABELS[amenityKey] ?? amenity.replace(/_/g, ' '));
+    }
+  }
+
+  return Array.from(items);
 }
 
 function inferSentenceSentiment(sentence: string): 'positive' | 'negative' | 'neutral' {
@@ -632,35 +1116,90 @@ function buildReviewQuoteEvidence(evidence: ReviewEvidence): string | null {
   return evidence.representative_quote ? `Other users found that "${evidence.representative_quote}"` : null;
 }
 
-function buildHotelClaimEvidence(hotel: Hotel, attribute: string, gap?: AttributeGap): string | null {
-  const keywords = ATTRIBUTE_KEYWORDS[attribute] ?? [];
-  const descriptionCorpus = [hotel.property_description, hotel.area_description].filter(Boolean).join(' ');
+function findHotelClaimSentence(hotel: Hotel, attribute: string, gap?: AttributeGap): string | null {
+  const keywords = getTopicDefinition(attribute).review_keywords;
 
-  if (descriptionCorpus) {
-    const matchingSentence = splitDisplaySentences(descriptionCorpus).find(sentence =>
-      containsAny(sentence.toLowerCase(), keywords),
-    );
-
-    if (matchingSentence) {
-      const quote = sanitiseQuote(matchingSentence);
-      if (quote) return `The hotel states that "${quote}"`;
-    }
+  for (const item of getHotelTopicTexts(hotel, attribute, gap)) {
+    if (!containsAny(item.toLowerCase(), keywords)) continue;
+    const quote = sanitiseQuote(item);
+    if (quote) return quote;
   }
 
+  return null;
+}
+
+function hasStructuredHotelClaim(hotel: Hotel, attribute: string, gap?: AttributeGap): boolean {
+  const definition = getTopicDefinition(attribute);
+  const amenityAttributeMatch = parseArrayField(hotel.popular_amenities_list).some(amenity => {
+    const amenityKey = amenity.toLowerCase();
+    return (
+      AMENITY_TO_ATTRIBUTE[amenityKey] === attribute
+      || (definition.hotel_amenities ?? []).includes(amenityKey)
+    );
+  });
+
+  if (amenityAttributeMatch || Boolean(gap?.amenity_claimed)) {
+    return true;
+  }
+
+  if (attribute === 'pet_policy' && Boolean(hotel.pet_policy)) {
+    return true;
+  }
+
+  if (attribute === 'check_in' && Boolean(hotel.check_in_end_time)) {
+    return true;
+  }
+
+  return (definition.hotel_fields ?? []).some(field => getHotelFieldItems(hotel, field).length > 0);
+}
+
+function buildStructuredHotelClaimText(hotel: Hotel, attribute: string, gap?: AttributeGap): string | null {
   if (gap?.amenity_claimed) {
-    const amenityLabel = AMENITY_LABELS[gap.amenity_claimed.toLowerCase()] ?? gap.amenity_claimed.replace(/_/g, ' ');
+    const amenityClaim = gap.amenity_claimed;
+    const amenityLabel = AMENITY_LABELS[amenityClaim.toLowerCase()] ?? amenityClaim.replace(/_/g, ' ');
     return `The hotel lists ${amenityLabel} as an amenity.`;
   }
 
-  if (attribute === 'pet_policy' && hotel.pet_policy) {
-    return 'The hotel lists pet-related policies for guests traveling with animals.';
+  if (attribute === 'pet_policy' || attribute === 'pet_fees' || attribute === 'pet_restrictions') {
+    return hotel.pet_policy
+      ? 'The hotel lists pet-related policies for guests traveling with animals.'
+      : null;
   }
 
   if (attribute === 'check_in' && hotel.check_in_end_time) {
     return `The hotel lists a check-in window ending at ${hotel.check_in_end_time}.`;
   }
 
+  if (attribute === 'extra_bed_policy' && hotel.children_and_extra_bed_policy) {
+    return 'The hotel lists policies for extra beds and family sleeping arrangements.';
+  }
+
+  if (attribute === 'crib_setup' && hotel.children_and_extra_bed_policy) {
+    return 'The hotel lists child sleep setup details, including crib-related policies.';
+  }
+
+  if (attribute === 'bathroom_accessibility' && getHotelFieldItems(hotel, 'property_amenity_accessibility').length > 0) {
+    return 'The hotel lists accessibility information for bathroom or in-room use.';
+  }
+
+  if (attribute === 'elevator_access' && hasStructuredHotelClaim(hotel, attribute, gap)) {
+    return 'The hotel lists elevator or step-free access details.';
+  }
+
+  if (hasStructuredHotelClaim(hotel, attribute, gap)) {
+    return `The hotel lists ${getAttributeLabel(attribute)} as part of the stay experience.`;
+  }
+
   return null;
+}
+
+function buildHotelClaimEvidence(hotel: Hotel, attribute: string, gap?: AttributeGap): string | null {
+  const sentence = findHotelClaimSentence(hotel, attribute, gap);
+  if (sentence) {
+    return `The hotel states that "${sentence}"`;
+  }
+
+  return buildStructuredHotelClaimText(hotel, attribute, gap);
 }
 
 function buildFallbackEvidence(attribute: string, gap?: AttributeGap): string {
@@ -686,7 +1225,71 @@ function buildEvidenceText(hotel: Hotel, reviews: Review[], attribute: string, g
 }
 
 function attributeMattersToUser(attribute: string, userTags: string[]): boolean {
-  return userTags.some(tag => (PERSONA_ATTRIBUTES[tag.trim()] ?? []).includes(attribute));
+  return getMatchingPersonaTagsForTopic(attribute, userTags).length > 0;
+}
+
+function buildAttributeContextSignal(
+  hotel: Hotel,
+  reviews: Review[],
+  attribute: string,
+  userTags: string[],
+  gap?: AttributeGap,
+): AttributeContextSignal {
+  const review_evidence = collectReviewEvidence(reviews, attribute);
+  const has_hotel_claim = Boolean(findHotelClaimSentence(hotel, attribute, gap)) || hasStructuredHotelClaim(hotel, attribute, gap);
+  const matters_to_user = attributeMattersToUser(attribute, userTags);
+
+  let grounding_score = 0;
+  let priority_multiplier = 1;
+
+  if (has_hotel_claim) {
+    grounding_score += 1;
+    priority_multiplier += HOTEL_CLAIM_PRIORITY_BONUS;
+  }
+
+  if (review_evidence.mention_count >= 2) {
+    grounding_score += 0.75;
+    priority_multiplier += LIGHT_REVIEW_SIGNAL_BONUS;
+  }
+
+  if (review_evidence.mention_count >= REVIEW_STAT_MIN_MENTIONS) {
+    grounding_score += 0.5;
+    priority_multiplier += STRONG_REVIEW_SIGNAL_BONUS;
+  }
+
+  if (review_evidence.representative_quote) {
+    grounding_score += 0.25;
+  }
+
+  if (matters_to_user) {
+    grounding_score += 0.35;
+    priority_multiplier += PERSONA_GROUNDING_BONUS;
+  }
+
+  if (!has_hotel_claim && review_evidence.mention_count === 0 && !matters_to_user) {
+    priority_multiplier *= GENERIC_STALE_ATTRIBUTE_PENALTY;
+  }
+
+  return {
+    review_evidence,
+    has_hotel_claim,
+    matters_to_user,
+    grounding_score,
+    priority_multiplier,
+  };
+}
+
+function getPersonaReasonFragment(attribute: string, userTags: string[]): string {
+  const matches = getMatchingPersonaTagsForTopic(attribute, userTags);
+  if (matches.length === 0) {
+    return 'your travel priorities';
+  }
+
+  if (matches.length === 1) {
+    return `"${matches[0]}"`;
+  }
+
+  return `"${matches[0]}" and similar priorities`;
 }
 
 function buildQuestionReason(
@@ -694,25 +1297,48 @@ function buildQuestionReason(
   gap: AttributeGap | undefined,
   userTags: string[],
   variant: 'main' | 'narrowing' = 'main',
+  topicSource: TopicSource = 'persona_only',
 ): string {
   if (variant === 'narrowing') {
-    return `You surfaced possible ${getAttributeLabel(attribute)} friction, so this follow-up narrows down what future guests should know.`;
+    if (topicSource === 'intersection' || topicSource === 'review_only') {
+      return `You raised possible ${getAttributeLabel(attribute)} friction in your review, so this follow-up narrows down what future guests should know.`;
+    }
+
+    return `This follow-up narrows down how ${getAttributeLabel(attribute)} affects travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
+  }
+
+  if (topicSource === 'intersection') {
+    const freshnessNote = gap?.decay_days
+      ? ` Recent reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`
+      : '';
+    return `You mentioned ${getAttributeLabel(attribute)} and your profile suggests ${getPersonaReasonFragment(attribute, userTags)}, so a fresh signal here helps similar guests.${freshnessNote}`;
+  }
+
+  if (topicSource === 'review_only') {
+    const freshnessNote = gap?.decay_days
+      ? ` Recent reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`
+      : '';
+    return `You mentioned ${getAttributeLabel(attribute)} in your review, so clarifying it helps future guests make a better call.${freshnessNote}`;
+  }
+
+  if (topicSource === 'blind_spot') {
+    return `Travelers with ${getPersonaReasonFragment(attribute, userTags)} often care about ${getAttributeLabel(attribute)}, but the hotel's listing has not been well confirmed by recent reviews.`;
   }
 
   if (gap?.source === 'both' && gap.decay_days && gap.amenity_claimed) {
-    return `The hotel advertises ${getAttributeLabel(attribute)}, but reviews have not refreshed that signal in ${summariseDuration(gap.decay_days)}.`;
+    return `Travelers with ${getPersonaReasonFragment(attribute, userTags)} often care about ${getAttributeLabel(attribute)}, and the hotel advertises it without a fresh review signal in ${summariseDuration(gap.decay_days)}.`;
   }
 
   if (gap?.source === 'decay' && gap.decay_days) {
-    return `${getAttributeLabel(attribute)} has not been mentioned in reviews for ${summariseDuration(gap.decay_days)} — your input helps refresh this signal.`;
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)} and reviews have not refreshed it in ${summariseDuration(gap.decay_days)}.`;
   }
 
   if (gap?.source !== 'decay' && gap?.amenity_claimed) {
-    return `The hotel advertises ${getAttributeLabel(attribute)}, but recent reviews do not confirm how it holds up in practice.`;
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
   }
 
   if (attributeMattersToUser(attribute, userTags)) {
-    return 'This is a high-impact detail for your travel preferences, so a fresh signal helps future guests like you.';
+    return `You did not mention ${getAttributeLabel(attribute)} directly, but it is a common decision point for travelers with ${getPersonaReasonFragment(attribute, userTags)}.`;
   }
 
   return 'This detail still has a thin review signal, so your input helps future guests make a better call.';
@@ -744,7 +1370,7 @@ function computePriorityScore(attribute: string, freshness: number, userTags: st
   const riskWeight = RISK_WEIGHTS[attribute] ?? 1;
   const staleness = 1 - freshness;
   const personaMultiplier = userTags.reduce((acc, tag) => {
-    return acc + (PERSONA_ATTRIBUTES[tag]?.includes(attribute) ? 0.3 : 0);
+    return acc + ((PERSONA_TOPIC_BUNDLES[tag] ?? []).includes(attribute) ? 0.3 : 0);
   }, 1.0);
   return riskWeight * staleness * personaMultiplier;
 }
@@ -1021,6 +1647,15 @@ function buildRankedGaps(
   mergedReviews: Review[],
 ): AttributeGap[] {
   const gapMap = new Map<string, AttributeGap>();
+  const contextSignals = new Map<string, AttributeContextSignal>();
+
+  const getContextSignal = (attribute: string, gap?: AttributeGap): AttributeContextSignal => {
+    const existing = contextSignals.get(attribute);
+    if (existing) return existing;
+    const signal = buildAttributeContextSignal(hotel, mergedReviews, attribute, userTags, gap);
+    contextSignals.set(attribute, signal);
+    return signal;
+  };
 
   // Layer 1 + 3 + 4: decay curve × persona boost × risk weight
   for (const attribute of Object.keys(DECAY_HALF_LIFE_DAYS)) {
@@ -1028,7 +1663,8 @@ function buildRankedGaps(
     const lastActive = record ? latestDate(record.last_mentioned_at, record.last_confirmed_at) : null;
 
     const freshness = computeFreshness(lastActive, attribute, today);
-    const priority = computePriorityScore(attribute, freshness, userTags);
+    const contextSignal = getContextSignal(attribute);
+    const priority = computePriorityScore(attribute, freshness, userTags) * contextSignal.priority_multiplier;
 
     // Minimum threshold: freshness must be below 0.95 (at least slightly stale)
     if (freshness >= 0.95) continue;
@@ -1044,22 +1680,49 @@ function buildRankedGaps(
       source: 'decay',
       decay_days: daysSince,
       freshness_score: freshness,
+      hotel_grounding_score: contextSignal.grounding_score,
+      review_mention_count: contextSignal.review_evidence.mention_count,
     });
   }
 
   // Layer 2: blind spot bonus — merge or add
   for (const bs of runBlindSpotLayer(hotel, mergedReviews)) {
+    const contextSignal = getContextSignal(bs.attribute, bs);
     const existing = gapMap.get(bs.attribute);
     if (existing) {
       existing.final_score += bs.raw_score;
       existing.source = 'both';
       existing.amenity_claimed = bs.amenity_claimed;
+      existing.hotel_grounding_score = Math.max(existing.hotel_grounding_score ?? 0, contextSignal.grounding_score);
+      existing.review_mention_count = contextSignal.review_evidence.mention_count;
     } else {
-      gapMap.set(bs.attribute, { ...bs, final_score: bs.raw_score });
+      gapMap.set(bs.attribute, {
+        ...bs,
+        final_score: bs.raw_score,
+        hotel_grounding_score: contextSignal.grounding_score,
+        review_mention_count: contextSignal.review_evidence.mention_count,
+      });
     }
   }
 
-  return Array.from(gapMap.values()).sort((a, b) => b.final_score - a.final_score);
+  return Array.from(gapMap.values()).sort((a, b) => {
+    const scoreDelta = b.final_score - a.final_score;
+    if (Math.abs(scoreDelta) > 0.75) {
+      return scoreDelta;
+    }
+
+    const groundingDelta = (b.hotel_grounding_score ?? 0) - (a.hotel_grounding_score ?? 0);
+    if (Math.abs(groundingDelta) > 0.1) {
+      return groundingDelta;
+    }
+
+    const mentionDelta = (b.review_mention_count ?? 0) - (a.review_mention_count ?? 0);
+    if (mentionDelta !== 0) {
+      return mentionDelta;
+    }
+
+    return scoreDelta;
+  });
 }
 
 // ─── Question generation ──────────────────────────────────────────────────────
@@ -1076,11 +1739,11 @@ function detectReviewSentiment(review: ReviewSubmissionRow): ReviewSentiment {
 
 function detectAttributeMentions(text: string): AttributeMention[] {
   const sentences = splitSentences(text);
-  return Object.entries(ATTRIBUTE_KEYWORDS)
-    .map(([attribute, keywords]) => {
+  return Object.entries(TOPIC_DEFINITIONS)
+    .map(([attribute, definition]) => {
       const m = sentences.reduce<AttributeMention>(
         (acc, sentence) => {
-          if (!containsAny(sentence, keywords)) return acc;
+          if (!containsAny(sentence, definition.review_keywords)) return acc;
           return {
             attribute,
             mentions: acc.mentions + 1,
@@ -1125,6 +1788,8 @@ function buildVerificationStatement(attribute: string, userTags: string[], gap: 
       return hasAnyTag(userTags, ['Business traveler', 'Digital nomad', 'Remote worker', 'Fast WiFi'])
         ? 'The WiFi felt stable enough for work, video calls, and trip planning.'
         : 'The WiFi felt stable enough to rely on during the stay.';
+    case 'work_environment':
+      return 'The hotel felt genuinely workable for laptop time, calls, or focused work.';
     case 'parking':
       return `${claimPrefix}parking process felt clear, convenient, and free of surprises.`;
     case 'breakfast':
@@ -1138,6 +1803,10 @@ function buildVerificationStatement(attribute: string, userTags: string[], gap: 
       return hasAnyTag(userTags, ['Pet owner', 'Guide dog owner'])
         ? 'This hotel felt genuinely welcoming for guests traveling with pets.'
         : 'The pet-related policies felt easy to navigate in practice.';
+    case 'pet_fees':
+      return 'Pet fees felt clear and reasonable before arrival.';
+    case 'pet_restrictions':
+      return 'The pet rules felt clear and workable in practice.';
     case 'noise':
       return hasAnyTag(userTags, ['Quiet', 'Light sleeper'])
         ? 'The room stayed quiet enough for real rest at night.'
@@ -1146,8 +1815,14 @@ function buildVerificationStatement(attribute: string, userTags: string[], gap: 
       return 'The room felt consistently clean, not just surface-level tidy.';
     case 'accessibility':
       return 'The accessibility setup felt practical and dependable in real use.';
+    case 'elevator_access':
+      return 'Elevator access felt reliable and easy to use throughout the stay.';
+    case 'bathroom_accessibility':
+      return 'Bathroom accessibility felt practical and dependable in real use.';
     case 'air_conditioning':
       return 'The room temperature and AC felt easy to manage comfortably.';
+    case 'room_comfort':
+      return 'The room felt comfortable enough for real rest, not just acceptable on paper.';
     case 'safety':
       return 'The property felt secure and easy to navigate.';
     case 'transit':
@@ -1158,6 +1833,10 @@ function buildVerificationStatement(attribute: string, userTags: string[], gap: 
       return 'The pool experience felt well-kept and worth using.';
     case 'gym':
       return 'The gym felt usable and better than a token amenity.';
+    case 'extra_bed_policy':
+      return 'Extra bed options felt clear and workable for the stay.';
+    case 'crib_setup':
+      return 'Crib or child sleep setup felt easy to arrange in practice.';
     default:
       return `The ${ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ')} held up well in actual use.`;
   }
@@ -1169,20 +1848,29 @@ function buildProblemStatement(attribute: string, userTags: string[]): string {
       return hasAnyTag(userTags, ['Business traveler', 'Digital nomad', 'Remote worker', 'Fast WiFi'])
         ? 'The WiFi felt too unstable to trust for work or video calls.'
         : 'The WiFi felt too unreliable to trust during the stay.';
+    case 'work_environment':
+      return 'The hotel did not provide a comfortable working environment.';
     case 'parking': return 'The parking process created avoidable friction.';
     case 'breakfast':
     case 'breakfast_quality': return 'Breakfast felt less dependable than expected.';
     case 'check_in': return 'Check-in felt harder than it should have been.';
     case 'pet_policy': return 'The hotel felt less pet-friendly in practice than it sounded on paper.';
+    case 'pet_fees': return 'Pet fees felt more confusing or expensive than expected.';
+    case 'pet_restrictions': return 'Pet restrictions made the stay harder to plan.';
     case 'noise':
       return hasAnyTag(userTags, ['Quiet', 'Light sleeper'])
         ? 'The room was not quiet enough for restful sleep.'
         : 'Noise disrupted the stay more than it should have.';
     case 'cleanliness': return 'Cleanliness issues affected the stay in a meaningful way.';
     case 'accessibility': return 'Accessibility gaps created real friction during the stay.';
+    case 'elevator_access': return 'Elevator access created real friction during the stay.';
+    case 'bathroom_accessibility': return 'Bathroom accessibility made the stay harder than it should have been.';
     case 'air_conditioning': return 'Temperature control was harder than it should have been.';
+    case 'room_comfort': return 'Room comfort fell short in a way that affected the stay.';
     case 'safety': return 'The property did not feel as secure as expected.';
     case 'construction': return 'Construction or renovation activity was meaningfully disruptive.';
+    case 'extra_bed_policy': return 'The extra bed policy or setup created friction for the stay.';
+    case 'crib_setup': return 'Crib or child sleep setup was harder than expected.';
     default:
       return `The ${ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ')} was worse in practice than expected.`;
   }
@@ -1239,6 +1927,7 @@ function buildPrimaryQuestion(
   mode: 'verification' | 'problem',
   context: QuestionContext,
   gap?: AttributeGap,
+  generatedText?: string | null,
 ): FollowUpQuestion {
   // Layer B: Check persona × attribute QuickTag override first.
   for (const tag of userTags) {
@@ -1263,7 +1952,7 @@ function buildPrimaryQuestion(
       feature_name: attribute,
       evidence_text: context.evidence_text,
       reason: context.reason,
-      prompt: slider.prompt(userTags),
+      prompt: generatedText ?? slider.prompt(userTags),
       left_label: slider.left_label,
       right_label: slider.right_label,
       nlp_hints: slider.nlp_hints,
@@ -1271,14 +1960,26 @@ function buildPrimaryQuestion(
   }
   return buildAgreementQuestion(
     attribute,
-    mode === 'problem'
-      ? buildProblemStatement(attribute, userTags)
-      : buildVerificationStatement(attribute, userTags, gap ?? { attribute, raw_score: 0, final_score: 0, source: 'decay' }),
+    generatedText ?? (
+      mode === 'problem'
+        ? buildProblemStatement(attribute, userTags)
+        : buildVerificationStatement(attribute, userTags, gap ?? { attribute, raw_score: 0, final_score: 0, source: 'decay' })
+    ),
     context,
   );
 }
 
-function buildReasonQuestion(attribute: string, text: string, userTags: string[], context: QuestionContext): FollowUpQuestion {
+function buildReasonQuestion(
+  attribute: string,
+  text: string,
+  userTags: string[],
+  context: QuestionContext,
+  generatedText?: string | null,
+): FollowUpQuestion {
+  if (generatedText) {
+    return buildAgreementQuestion(`${attribute}_reason`, generatedText, context);
+  }
+
   const builder = REASON_PROMPTS[attribute];
   if (builder) return builder(text, userTags, context);
   return buildAgreementQuestion(
@@ -1288,24 +1989,224 @@ function buildReasonQuestion(attribute: string, text: string, userTags: string[]
   );
 }
 
-function selectPositiveGap(rankedGaps: AttributeGap[], mentions: AttributeMention[]): AttributeGap | undefined {
-  const mentionedAttrs = new Set(mentions.map(m => m.attribute));
-  return rankedGaps.find(g => !mentionedAttrs.has(g.attribute)) ?? rankedGaps[0];
+function getQuestionUiType(attribute: string): FollowUpQuestion['ui_type'] {
+  return SLIDER_CONFIG[attribute] ? 'Slider' : 'Agreement';
 }
 
-function selectPrimaryNegativeAttribute(
+function getBlindSpotAmenityClaim(hotel: Hotel, topic: string): string | undefined {
+  const definition = getTopicDefinition(topic);
+  const amenity = parseArrayField(hotel.popular_amenities_list).find(item => {
+    const amenityKey = item.toLowerCase();
+    return (
+      AMENITY_TO_ATTRIBUTE[amenityKey] === topic
+      || (definition.hotel_amenities ?? []).includes(amenityKey)
+    );
+  });
+
+  if (amenity) return amenity;
+  if (topic === 'pet_policy' || topic === 'pet_fees' || topic === 'pet_restrictions') return 'pet_policy';
+  if (topic === 'check_in') return 'check_in_window';
+  if (topic === 'extra_bed_policy') return 'extra_bed';
+  if (topic === 'crib_setup') return 'crib';
+  if (topic === 'elevator_access') return 'elevator';
+  return undefined;
+}
+
+function buildCandidateTopics(
   mentions: AttributeMention[],
+  freshnessMap: Map<string, FreshnessRecord>,
+  today: Date,
+  userTags: string[],
+  hotel: Hotel,
+  mergedReviews: Review[],
   rankedGaps: AttributeGap[],
-): string | undefined {
-  return mentions.find(m => m.negative > 0)?.attribute ?? rankedGaps[0]?.attribute;
+): CandidateTopic[] {
+  const reviewMentionMap = new Map(mentions.map(mention => [mention.attribute, mention]));
+  const personaTopicCounts = getPersonaTopicCounts(userTags);
+  const rankedGapMap = new Map(rankedGaps.map(gap => [gap.attribute, gap]));
+  const candidateKeys = new Set<string>([
+    ...reviewMentionMap.keys(),
+    ...personaTopicCounts.keys(),
+  ]);
+
+  const candidates: CandidateTopic[] = [];
+
+  for (const topic of candidateKeys) {
+    const definition = TOPIC_DEFINITIONS[topic];
+    if (!definition) continue;
+
+    const reviewMention = reviewMentionMap.get(topic);
+    const personaMatchCount = personaTopicCounts.get(topic) ?? 0;
+    const existingGap = rankedGapMap.get(topic);
+    const reviewEvidence = collectReviewEvidence(mergedReviews, topic);
+    const hotelSupport = Boolean(findHotelClaimSentence(hotel, topic, existingGap)) || hasStructuredHotelClaim(hotel, topic, existingGap);
+    const blindSpot = hotelSupport && reviewEvidence.mention_count === 0;
+    const record = freshnessMap.get(topic);
+    const lastActive = record ? latestDate(record.last_mentioned_at, record.last_confirmed_at) : null;
+    const freshness = computeFreshness(lastActive, topic, today);
+    const syntheticGap: AttributeGap | undefined = blindSpot
+      ? {
+          attribute: topic,
+          raw_score: 0,
+          final_score: 0,
+          source: existingGap?.source === 'decay' ? 'both' : 'blind_spot',
+          decay_days: lastActive ? Math.floor((today.getTime() - lastActive.getTime()) / 86_400_000) : undefined,
+          freshness_score: freshness,
+          amenity_claimed: getBlindSpotAmenityClaim(hotel, topic),
+        }
+      : undefined;
+    const gap = existingGap ?? syntheticGap;
+    const contextSignal = buildAttributeContextSignal(hotel, mergedReviews, topic, userTags, gap);
+
+    const eligible = Boolean(reviewMention)
+      || (personaMatchCount > 0 && (hotelSupport || reviewEvidence.mention_count > 0 || blindSpot));
+
+    if (!eligible) continue;
+
+    const topicSource: TopicSource = reviewMention && personaMatchCount > 0
+      ? 'intersection'
+      : reviewMention
+        ? 'review_only'
+        : blindSpot
+          ? 'blind_spot'
+          : 'persona_only';
+
+    candidates.push({
+      topic_key: topic,
+      attribute: definition.attribute,
+      topic_source: topicSource,
+      review_mentions: reviewMention?.mentions ?? 0,
+      review_negative_mentions: reviewMention?.negative ?? 0,
+      review_positive_mentions: reviewMention?.positive ?? 0,
+      persona_match_count: personaMatchCount,
+      hotel_grounding_score: contextSignal.grounding_score,
+      freshness_score: gap?.freshness_score ?? freshness,
+      risk_score: RISK_WEIGHTS[topic] ?? 0,
+      blind_spot: blindSpot,
+      gap,
+    });
+  }
+
+  return candidates;
+}
+
+function compareCandidateTieBreakers(a: CandidateTopic, b: CandidateTopic): number {
+  const groundingDelta = b.hotel_grounding_score - a.hotel_grounding_score;
+  if (Math.abs(groundingDelta) > 0.01) return groundingDelta;
+
+  const freshnessDelta = a.freshness_score - b.freshness_score;
+  if (Math.abs(freshnessDelta) > 0.01) return freshnessDelta;
+
+  const riskDelta = b.risk_score - a.risk_score;
+  if (riskDelta !== 0) return riskDelta;
+
+  const personaDelta = b.persona_match_count - a.persona_match_count;
+  if (personaDelta !== 0) return personaDelta;
+
+  return b.review_mentions - a.review_mentions;
+}
+
+function getPositiveSourceRank(source: TopicSource): number {
+  switch (source) {
+    case 'intersection': return 4;
+    case 'review_only': return 3;
+    case 'blind_spot': return 2;
+    case 'persona_only': return 1;
+    default: return 0;
+  }
+}
+
+function getNegativeSourceRank(source: TopicSource): number {
+  switch (source) {
+    case 'intersection': return 4;
+    case 'review_only': return 3;
+    case 'blind_spot': return 2;
+    case 'persona_only': return 1;
+    default: return 0;
+  }
+}
+
+function selectPositiveCandidates(candidates: CandidateTopic[]): CandidateTopic[] {
+  const sorted = [...candidates].sort((a, b) => {
+    const sourceDelta = getPositiveSourceRank(b.topic_source) - getPositiveSourceRank(a.topic_source);
+    if (sourceDelta !== 0) return sourceDelta;
+
+    const positiveDelta = b.review_positive_mentions - a.review_positive_mentions;
+    if (positiveDelta !== 0) return positiveDelta;
+
+    return compareCandidateTieBreakers(a, b);
+  });
+
+  const selected: CandidateTopic[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of sorted) {
+    if (seen.has(candidate.attribute)) continue;
+    if (selected.length === 0) {
+      selected.push(candidate);
+      seen.add(candidate.attribute);
+      continue;
+    }
+
+    const supportsPositiveExpansion = candidate.topic_source === 'intersection'
+      || candidate.topic_source === 'blind_spot'
+      || candidate.topic_source === 'persona_only';
+
+    if (!supportsPositiveExpansion) continue;
+
+    selected.push(candidate);
+    seen.add(candidate.attribute);
+    if (selected.length === 2) break;
+  }
+
+  return selected;
+}
+
+function getReviewAnchoredCandidates(candidates: CandidateTopic[]): CandidateTopic[] {
+  return candidates.filter(candidate =>
+    candidate.topic_source === 'intersection' || candidate.topic_source === 'review_only',
+  );
+}
+
+function selectNegativeCandidate(candidates: CandidateTopic[]): CandidateTopic | undefined {
+  const reviewAnchoredCandidates = getReviewAnchoredCandidates(candidates);
+  const directPainCandidates = reviewAnchoredCandidates.filter(candidate =>
+    (candidate.topic_source === 'intersection' || candidate.topic_source === 'review_only')
+    && candidate.review_negative_mentions > 0,
+  );
+
+  if (directPainCandidates.length > 0) {
+    return [...directPainCandidates].sort((a, b) => {
+      const sourceDelta = getNegativeSourceRank(b.topic_source) - getNegativeSourceRank(a.topic_source);
+      if (sourceDelta !== 0) return sourceDelta;
+      const negativeDelta = b.review_negative_mentions - a.review_negative_mentions;
+      if (negativeDelta !== 0) return negativeDelta;
+      return compareCandidateTieBreakers(a, b);
+    })[0];
+  }
+
+  if (reviewAnchoredCandidates.length > 0) {
+    return [...reviewAnchoredCandidates].sort((a, b) => {
+      const sourceDelta = getNegativeSourceRank(b.topic_source) - getNegativeSourceRank(a.topic_source);
+      if (sourceDelta !== 0) return sourceDelta;
+      return compareCandidateTieBreakers(a, b);
+    })[0];
+  }
+
+  return undefined;
 }
 
 function buildGenerationSummary(
   reviewSentiment: ReviewSentiment,
+  candidateTopics: CandidateTopic[],
   rankedGaps: AttributeGap[],
   questions: FollowUpQuestion[],
   selectedAttribute?: string,
 ): string {
+  const topCandidates = candidateTopics
+    .slice(0, 5)
+    .map(candidate => `${candidate.topic_key}:${candidate.topic_source}(ground=${candidate.hotel_grounding_score.toFixed(2)},fresh=${(candidate.freshness_score * 100).toFixed(0)}%,risk=${candidate.risk_score})`)
+    .join(', ');
   const top5 = rankedGaps
     .slice(0, 5)
     .map(g => `${g.attribute}:${g.final_score.toFixed(1)}(fresh=${((g.freshness_score ?? 0) * 100).toFixed(0)}%,${g.source})`)
@@ -1315,8 +2216,83 @@ function buildGenerationSummary(
     `review_sentiment=${reviewSentiment}`,
     `question_count=${questions.length}`,
     `selected_attribute=${selectedAttribute ?? 'none'}`,
+    `candidate_topics=${topCandidates || 'none'}`,
     `ranked_gaps=${top5 || 'none'}`,
   ].join('\n');
+}
+
+function sanitizeDynamicQuestionText(text: string | null | undefined): string | null {
+  const trimmed = text?.trim() ?? '';
+  if (!trimmed) return null;
+  const unwrapped =
+    (trimmed.startsWith('"') && trimmed.endsWith('"'))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+      ? trimmed.slice(1, -1).trim()
+      : trimmed;
+  return unwrapped.length > 220 ? `${unwrapped.slice(0, 217).trimEnd()}...` : unwrapped;
+}
+
+function parseGeneratedQuestionCopy(item: unknown): GeneratedQuestionCopy | null {
+  if (!item || typeof item !== 'object') {
+    return null;
+  }
+
+  const candidate = item as Record<string, unknown>;
+  if (typeof candidate.id !== 'string') {
+    return null;
+  }
+
+  return {
+    id: candidate.id,
+    primary_text: typeof candidate.primary_text === 'string' ? candidate.primary_text : null,
+    narrowing_text: typeof candidate.narrowing_text === 'string' ? candidate.narrowing_text : null,
+  };
+}
+
+async function generateDynamicQuestionCopy(
+  requests: DynamicQuestionCopyRequest[],
+): Promise<Map<string, GeneratedQuestionCopy>> {
+  if (requests.length === 0) {
+    return new Map();
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: FOLLOW_UP_GENERATION_MODEL,
+      response_format: { type: 'json_object' },
+      temperature: 0.5,
+      messages: [
+        { role: 'system', content: FOLLOW_UP_COPY_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: JSON.stringify({ items: requests }),
+        },
+      ],
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      return new Map();
+    }
+
+    const parsed = JSON.parse(content) as { items?: unknown[] };
+    const result = new Map<string, GeneratedQuestionCopy>();
+
+    for (const rawItem of parsed.items ?? []) {
+      const item = parseGeneratedQuestionCopy(rawItem);
+      if (!item) continue;
+      result.set(item.id, {
+        id: item.id,
+        primary_text: sanitizeDynamicQuestionText(item.primary_text),
+        narrowing_text: sanitizeDynamicQuestionText(item.narrowing_text),
+      });
+    }
+
+    return result;
+  } catch (error) {
+    console.warn('[follow-up] dynamic question generation failed:', error);
+    return new Map();
+  }
 }
 
 function mapSubmissionToReview(row: ReviewSubmissionRow): Review {
@@ -1398,49 +2374,134 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
   // Step C: Build ranked gap list (Layers 1–4).
   const rankedGaps = buildRankedGaps(freshnessMap, today, userTags, hotel, mergedReviews);
 
-  if (rankedGaps.length === 0) {
+  // Step D: Generate questions based on review sentiment.
+  const reviewSentiment = detectReviewSentiment(currentReview);
+  const mentions = detectAttributeMentions(reviewText);
+  const candidateTopics = buildCandidateTopics(mentions, freshnessMap, today, userTags, hotel, mergedReviews, rankedGaps);
+
+  if (candidateTopics.length === 0) {
     return {
       review_id,
       property_id,
       questions: [],
-      llm_prompt: 'generation_mode=deterministic_decay_v2\nranked_gaps=none',
+      llm_prompt: buildGenerationSummary(reviewSentiment, [], rankedGaps, [], undefined),
     };
   }
-
-  // Step D: Generate questions based on review sentiment.
-  const reviewSentiment = detectReviewSentiment(currentReview);
-  const mentions = detectAttributeMentions(reviewText);
 
   let questions: FollowUpQuestion[] = [];
   let selectedAttribute: string | undefined;
 
   if (reviewSentiment === 'positive') {
-    const selectedGap = selectPositiveGap(rankedGaps, mentions);
-    if (selectedGap) {
-      selectedAttribute = selectedGap.attribute;
-      const context = {
-        evidence_text: buildEvidenceText(hotel, mergedReviews, selectedGap.attribute, selectedGap),
-        reason: buildQuestionReason(selectedGap.attribute, selectedGap, userTags),
-      };
-      questions = [buildPrimaryQuestion(selectedGap.attribute, userTags, 'verification', context, selectedGap)];
+    const positiveCandidates = selectPositiveCandidates(candidateTopics);
+    if (positiveCandidates.length > 0) {
+      selectedAttribute = positiveCandidates[0].attribute;
+      const dynamicCopy = await generateDynamicQuestionCopy(
+        positiveCandidates.map(candidate => ({
+          id: `${candidate.attribute}:primary`,
+          attribute: candidate.attribute,
+          ui_type: getQuestionUiType(candidate.attribute),
+          path: 'positive_primary',
+          topic_source: candidate.topic_source,
+          review_sentiment: reviewSentiment,
+          user_tags: userTags,
+          submitted_review: reviewText,
+          evidence_text: buildEvidenceText(hotel, mergedReviews, candidate.attribute, candidate.gap),
+          reason: buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source),
+          review_mentions: candidate.review_mentions,
+          review_negative_mentions: candidate.review_negative_mentions,
+        })),
+      );
+
+      questions = positiveCandidates.map(candidate => {
+        const evidenceText = buildEvidenceText(hotel, mergedReviews, candidate.attribute, candidate.gap);
+        const reasonText = buildQuestionReason(candidate.attribute, candidate.gap, userTags, 'main', candidate.topic_source);
+        const context = {
+          evidence_text: evidenceText,
+          reason: reasonText,
+        };
+        const generated = dynamicCopy.get(`${candidate.attribute}:primary`)?.primary_text ?? null;
+        return buildPrimaryQuestion(candidate.attribute, userTags, 'verification', context, candidate.gap, generated);
+      });
     }
   } else {
-    const primaryAttribute = selectPrimaryNegativeAttribute(mentions, rankedGaps);
-    if (primaryAttribute) {
-      selectedAttribute = primaryAttribute;
-      const matchingGap = rankedGaps.find(g => g.attribute === primaryAttribute);
+    const selectedCandidate = selectNegativeCandidate(candidateTopics);
+    if (selectedCandidate) {
+      selectedAttribute = selectedCandidate.attribute;
+      const evidenceText = buildEvidenceText(hotel, mergedReviews, selectedCandidate.attribute, selectedCandidate.gap);
+      const mainReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'main', selectedCandidate.topic_source);
+      const narrowingReason = buildQuestionReason(selectedCandidate.attribute, selectedCandidate.gap, userTags, 'narrowing', selectedCandidate.topic_source);
+      const shouldAskNarrowingQuestion = selectedCandidate.review_negative_mentions > 0
+        || selectedCandidate.review_mentions > 1
+        || selectedCandidate.topic_source === 'intersection';
+
+      const dynamicRequests: DynamicQuestionCopyRequest[] = [
+        {
+          id: `${selectedCandidate.attribute}:primary`,
+          attribute: selectedCandidate.attribute,
+          ui_type: getQuestionUiType(selectedCandidate.attribute),
+          path: 'negative_primary',
+          topic_source: selectedCandidate.topic_source,
+          review_sentiment: reviewSentiment,
+          user_tags: userTags,
+          submitted_review: reviewText,
+          evidence_text: evidenceText,
+          reason: mainReason,
+          review_mentions: selectedCandidate.review_mentions,
+          review_negative_mentions: selectedCandidate.review_negative_mentions,
+        },
+      ];
+
+      if (shouldAskNarrowingQuestion) {
+        dynamicRequests.push({
+          id: `${selectedCandidate.attribute}:narrowing`,
+          attribute: selectedCandidate.attribute,
+          ui_type: 'Agreement',
+          path: 'negative_narrowing',
+          topic_source: selectedCandidate.topic_source,
+          review_sentiment: reviewSentiment,
+          user_tags: userTags,
+          submitted_review: reviewText,
+          evidence_text: evidenceText,
+          reason: narrowingReason,
+          review_mentions: selectedCandidate.review_mentions,
+          review_negative_mentions: selectedCandidate.review_negative_mentions,
+        });
+      }
+
+      const dynamicCopy = await generateDynamicQuestionCopy(dynamicRequests);
+
       const mainContext = {
-        evidence_text: buildEvidenceText(hotel, mergedReviews, primaryAttribute, matchingGap),
-        reason: buildQuestionReason(primaryAttribute, matchingGap, userTags, 'main'),
+        evidence_text: evidenceText,
+        reason: mainReason,
       };
       const reasonContext = {
-        evidence_text: buildEvidenceText(hotel, mergedReviews, primaryAttribute, matchingGap),
-        reason: buildQuestionReason(primaryAttribute, matchingGap, userTags, 'narrowing'),
+        evidence_text: evidenceText,
+        reason: narrowingReason,
       };
       questions = [
-        buildPrimaryQuestion(primaryAttribute, userTags, 'problem', mainContext, matchingGap),
-        buildReasonQuestion(primaryAttribute, reviewText, userTags, reasonContext),
+        buildPrimaryQuestion(
+          selectedCandidate.attribute,
+          userTags,
+          'problem',
+          mainContext,
+          selectedCandidate.gap,
+          dynamicCopy.get(`${selectedCandidate.attribute}:primary`)?.primary_text ?? null,
+        ),
       ];
+
+      if (shouldAskNarrowingQuestion) {
+        questions.push(
+          buildReasonQuestion(
+            selectedCandidate.attribute,
+            reviewText,
+            userTags,
+            reasonContext,
+            dynamicCopy.get(`${selectedCandidate.attribute}:narrowing`)?.narrowing_text
+              ?? dynamicCopy.get(`${selectedCandidate.attribute}:narrowing`)?.primary_text
+              ?? null,
+          ),
+        );
+      }
     }
   }
 
@@ -1448,6 +2509,6 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
     review_id,
     property_id,
     questions,
-    llm_prompt: buildGenerationSummary(reviewSentiment, rankedGaps, questions, selectedAttribute),
+    llm_prompt: buildGenerationSummary(reviewSentiment, candidateTopics, rankedGaps, questions, selectedAttribute),
   };
 }

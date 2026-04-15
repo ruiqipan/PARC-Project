@@ -215,8 +215,8 @@ Backfill / migration helpers:
 
 Important distinction:
 
-- The follow-up engine does not currently use an LLM at runtime.
-- The `llm_prompt` field returned by the follow-up route is now effectively a deterministic generation summary for debugging/transparency.
+- The follow-up engine now uses deterministic topic selection plus a runtime OpenAI call to generate the final question wording.
+- The `llm_prompt` field returned by the follow-up route remains a deterministic generation summary for debugging/transparency rather than the literal model prompt payload.
 
 ## 7. Background / Maintenance Scripts
 
