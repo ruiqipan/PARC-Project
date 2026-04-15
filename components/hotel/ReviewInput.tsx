@@ -8,6 +8,7 @@ import type { FollowUpQuestion } from '@/types';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface QuickTag {
+  emoji: string;
   label: string;
   snippet: string;
 }
@@ -22,14 +23,14 @@ interface QAItem {
 // ── Static data ───────────────────────────────────────────────────────────────
 
 const QUICK_TAGS: QuickTag[] = [
-  { label: 'Location',    snippet: 'Location: ' },
-  { label: 'Facilities',  snippet: 'Hotel facilities are ' },
-  { label: 'Cleanliness', snippet: 'Cleanliness: ' },
-  { label: 'Service',     snippet: 'Service: ' },
-  { label: 'WiFi',        snippet: 'WiFi: ' },
-  { label: 'Breakfast',   snippet: 'Breakfast: ' },
-  { label: 'Value',       snippet: 'Value for money: ' },
-  { label: 'Noise',       snippet: 'Noise level: ' },
+  { emoji: '📍', label: 'Location', snippet: '📍 Location: ' },
+  { emoji: '🏨', label: 'Facilities', snippet: '🏨 Facilities: ' },
+  { emoji: '🧼', label: 'Cleanliness', snippet: '🧼 Cleanliness: ' },
+  { emoji: '🤝', label: 'Service', snippet: '🤝 Service: ' },
+  { emoji: '🛜', label: 'WiFi', snippet: '🛜 WiFi: ' },
+  { emoji: '🍳', label: 'Breakfast', snippet: '🍳 Breakfast: ' },
+  { emoji: '💸', label: 'Value', snippet: '💸 Value for money: ' },
+  { emoji: '🔇', label: 'Noise', snippet: '🔇 Noise level: ' },
 ];
 
 const QA_ITEMS: QAItem[] = [
@@ -137,6 +138,15 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
     focusTextarea();
   }
 
+  function appendLineToText(snippet: string) {
+    setText(prev => {
+      const base = prev.trimEnd();
+      return base ? `${base}\n${snippet}` : snippet;
+    });
+    setIsPolished(false);
+    focusTextarea();
+  }
+
   // ── Q&A click ────────────────────────────────────────────────────────────
 
   function handleQAClick(item: QAItem) {
@@ -146,7 +156,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
   // ── Quick Tag click ──────────────────────────────────────────────────────
 
   function handleTagClick(tag: QuickTag) {
-    appendToText(tag.snippet);
+    appendLineToText(tag.snippet);
   }
 
   // ── AI Polish ────────────────────────────────────────────────────────────
@@ -479,7 +489,7 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
               onClick={() => handleTagClick(tag)}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-gray-200 bg-gray-50 text-gray-600 text-xs font-medium hover:bg-[#0071c2] hover:text-white hover:border-[#0071c2] transition-colors active:scale-95"
             >
-              <span className="text-[10px] text-gray-400 group-hover:text-white">+</span>
+              <span aria-hidden>{tag.emoji}</span>
               {tag.label}
             </button>
           ))}
