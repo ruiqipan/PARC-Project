@@ -47,8 +47,6 @@ export interface FollowUpEngineResponse {
   questions: FollowUpQuestion[];
   /** Exact prompt sent to the LLM — included for transparency and debugging. */
   llm_prompt: string;
-  /** Human-readable explanation of why the top question was chosen (shown in FollowUpCard). */
-  reason?: string;
 }
 
 // ─── Follow-Up Question Payload (from 4-Layer Recommendation Engine) ─────────
@@ -69,6 +67,10 @@ export interface SemanticSliderQuestion {
   ui_type: 'Slider';
   /** Machine-readable key stored in FollowUp_Answers.feature_name */
   feature_name: string;
+  /** Real-data provenance line shown above the prompt. */
+  evidence_text: string | null;
+  /** Short explanation of why this question is being asked now. */
+  reason: string;
   /** Human-readable prompt shown above the slider */
   prompt: string;
   /** Left-pole label (e.g. "Soft") */
@@ -81,33 +83,31 @@ export interface SemanticSliderQuestion {
    * animates the thumb toward the matching pole.
    */
   nlp_hints: NlpHint[];
-  /** Why this question was selected — shown in FollowUpCard header. */
-  reason?: string;
 }
 
 /** A statement-validation question rendered as a 1–5 Disagree→Agree axis. */
 export interface AgreementQuestion {
   ui_type: 'Agreement';
   feature_name: string;
+  evidence_text: string | null;
+  reason: string;
   /**
    * Full statement the user is asked to validate.
    * e.g. "This hotel is very dog friendly"
-   */
+  */
   statement: string;
   nlp_hints: NlpHint[];
-  /** Why this question was selected — shown in FollowUpCard header. */
-  reason?: string;
 }
 
 /** A multi-select recognition grid of pre-defined option chips. */
 export interface QuickTagQuestion {
   ui_type: 'QuickTag';
   feature_name: string;
+  evidence_text: string | null;
+  reason: string;
   prompt: string;
   /** Pre-defined options the user can tap — no typing required. */
   options: string[];
-  /** Why this question was selected — shown in FollowUpCard header. */
-  reason?: string;
 }
 
 export type FollowUpQuestion =

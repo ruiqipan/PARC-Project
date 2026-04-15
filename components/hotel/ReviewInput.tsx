@@ -602,12 +602,14 @@ export default function ReviewInput({ propertyId, userId, username, onSubmitSucc
       )}
 
       {followUpState === 'ready' && followUpQuestions.length > 0 && (
-        <div className="pt-2">
-          <FollowUpCard
-            questions={followUpQuestions}
-            onComplete={handleFollowUpComplete}
-            onDismiss={handleFollowUpDismiss}
-          />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6 backdrop-blur-[2px]">
+          <div className="max-h-full w-full max-w-3xl overflow-y-auto">
+            <FollowUpCard
+              questions={followUpQuestions}
+              onComplete={handleFollowUpComplete}
+              onDismiss={handleFollowUpDismiss}
+            />
+          </div>
         </div>
       )}
     </div>

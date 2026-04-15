@@ -31,7 +31,7 @@
  */
 
 import { createServerClient } from '@/lib/supabase';
-import { parseArrayField } from '@/lib/utils';
+import { AMENITY_LABELS, parseArrayField, stripHtml } from '@/lib/utils';
 import type {
   AgreementQuestion,
   FollowUpEngineResponse,
@@ -79,6 +79,17 @@ interface AttributeMention {
   mentions: number;
   positive: number;
   negative: number;
+}
+interface QuestionContext {
+  evidence_text: string | null;
+  reason: string;
+}
+
+interface ReviewEvidence {
+  mention_count: number;
+  positive_count: number;
+  negative_count: number;
+  representative_quote: string | null;
 }
 
 // ─── Attribute metadata ───────────────────────────────────────────────────────
@@ -241,6 +252,27 @@ const ATTRIBUTE_LABELS: Record<string, string> = {
   breakfast_quality: 'breakfast quality',
 };
 
+const ATTRIBUTE_STAT_PHRASES: Record<string, { positive: string; negative: string }> = {
+  wifi: { positive: 'described it as reliable', negative: 'described it as unreliable' },
+  noise: { positive: 'said the room stayed quiet', negative: 'said noise was disruptive' },
+  cleanliness: { positive: 'said the room felt clean', negative: 'said cleanliness was an issue' },
+  parking: { positive: 'said parking felt straightforward', negative: 'said parking created friction' },
+  breakfast: { positive: 'said breakfast felt dependable', negative: 'said breakfast fell short' },
+  breakfast_quality: { positive: 'said breakfast quality felt strong', negative: 'said breakfast quality fell short' },
+  check_in: { positive: 'said check-in felt smooth', negative: 'said check-in felt difficult' },
+  pet_policy: { positive: 'said the hotel felt pet-friendly', negative: 'said the pet experience felt restrictive' },
+  accessibility: { positive: 'said accessibility worked well in practice', negative: 'said accessibility gaps created friction' },
+  air_conditioning: { positive: 'said temperature control felt easy', negative: 'said temperature control was hard to manage' },
+  safety: { positive: 'said the property felt secure', negative: 'said the property felt less secure than expected' },
+  pool: { positive: 'said the pool was worth using', negative: 'said the pool experience disappointed' },
+  gym: { positive: 'said the gym felt usable', negative: 'said the gym felt underwhelming' },
+  transit: { positive: 'said getting around felt convenient', negative: 'said getting around took more effort than expected' },
+  construction: { positive: 'said construction was barely noticeable', negative: 'said construction was disruptive' },
+};
+
+const REVIEW_STAT_MIN_MENTIONS = 5;
+const REVIEW_STAT_MIN_CONSENSUS = 0.75;
+
 const POSITIVE_SENTIMENT_WORDS = [
   'great', 'good', 'excellent', 'amazing', 'wonderful', 'smooth', 'friendly',
   'comfortable', 'clean', 'quiet', 'easy', 'reliable', 'convenient', 'loved',
@@ -335,8 +367,8 @@ const SLIDER_CONFIG: Record<
   },
 };
 
-const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => AgreementQuestion> = {
-  noise: (text, userTags) =>
+const REASON_PROMPTS: Record<string, (text: string, userTags: string[], context: QuestionContext) => AgreementQuestion> = {
+  noise: (text, userTags, context) =>
     buildAgreementQuestion(
       'noise_reason',
       pickReasonStatement(
@@ -359,16 +391,18 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
           ? 'The problem was repeated noise during rest hours, not just a one-off interruption.'
           : 'The problem was recurring noise, not just a one-off interruption.',
       ),
+      context,
     ),
-  wifi: text =>
+  wifi: (text, _userTags, context) =>
     buildAgreementQuestion(
       'wifi_reason',
       pickReasonStatement(text, [
         { keywords: ['slow', 'speed', 'buffer', 'lag'], statement: 'Slow speed was the main reason the WiFi felt unreliable.' },
         { keywords: ['drop', 'disconnect', 'signal', 'weak'], statement: 'Dropouts or weak in-room signal were the main WiFi problem.' },
       ], 'Reliability was the bigger WiFi issue than the login or setup process.'),
+      context,
     ),
-  parking: text =>
+  parking: (text, _userTags, context) =>
     buildAgreementQuestion(
       'parking_reason',
       pickReasonStatement(text, [
@@ -376,8 +410,9 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['entrance', 'find', 'garage', 'signage'], statement: 'Finding the parking entrance or instructions was the biggest parking challenge.' },
         { keywords: ['full', 'space', 'spot', 'availability'], statement: 'Parking availability was the main issue, more than the process itself.' },
       ], 'The parking process created more friction than confidence.'),
+      context,
     ),
-  breakfast: text =>
+  breakfast: (text, _userTags, context) =>
     buildAgreementQuestion(
       'breakfast_reason',
       pickReasonStatement(text, [
@@ -385,8 +420,9 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['crowded', 'line', 'wait'], statement: 'Crowding or long waits were the main breakfast issue.' },
         { keywords: ['late', 'hours', 'timing', 'ended'], statement: 'Timing or availability was the main breakfast issue.' },
       ], 'Breakfast felt less dependable in practice than it sounded on paper.'),
+      context,
     ),
-  check_in: text =>
+  check_in: (text, _userTags, context) =>
     buildAgreementQuestion(
       'check_in_reason',
       pickReasonStatement(text, [
@@ -394,8 +430,9 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['line', 'wait', 'staff', 'desk'], statement: 'Front-desk response time was the main check-in problem.' },
         { keywords: ['instructions', 'confusing', 'unclear'], statement: 'Unclear instructions made check-in harder than it should have been.' },
       ], 'The check-in problem felt structural, not just bad luck with timing.'),
+      context,
     ),
-  cleanliness: text =>
+  cleanliness: (text, _userTags, context) =>
     buildAgreementQuestion(
       'cleanliness_reason',
       pickReasonStatement(text, [
@@ -403,16 +440,18 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['sheet', 'bed', 'linen', 'pillow'], statement: 'Bedding or linen cleanliness drove most of the problem.' },
         { keywords: ['smell', 'odor', 'odour', 'musty', 'mold'], statement: 'Smell or stale air was a major part of the cleanliness issue.' },
       ], 'The issue felt like an ongoing cleanliness problem, not a tiny one-off detail.'),
+      context,
     ),
-  pet_policy: text =>
+  pet_policy: (text, _userTags, context) =>
     buildAgreementQuestion(
       'pet_policy_reason',
       pickReasonStatement(text, [
         { keywords: ['fee', 'charge', 'cost'], statement: 'Extra fees made the pet experience feel less friendly.' },
         { keywords: ['restrict', 'rule', 'policy'], statement: 'Policy restrictions mattered more than staff attitude.' },
       ], 'The pet experience felt more restricted than welcoming.'),
+      context,
     ),
-  accessibility: text =>
+  accessibility: (text, _userTags, context) =>
     buildAgreementQuestion(
       'accessibility_reason',
       pickReasonStatement(text, [
@@ -420,8 +459,9 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['step', 'stairs', 'ramp'], statement: 'Steps or missing ramps were the main accessibility issue.' },
         { keywords: ['bathroom', 'shower'], statement: 'Bathroom usability was the biggest accessibility issue.' },
       ], 'The accessibility problem affected actual usability, not just convenience.'),
+      context,
     ),
-  air_conditioning: text =>
+  air_conditioning: (text, _userTags, context) =>
     buildAgreementQuestion(
       'air_conditioning_reason',
       pickReasonStatement(text, [
@@ -429,6 +469,7 @@ const REASON_PROMPTS: Record<string, (text: string, userTags: string[]) => Agree
         { keywords: ['loud', 'noise', 'rattle'], statement: 'AC noise was as big a problem as the temperature itself.' },
         { keywords: ['control', 'thermostat'], statement: 'The thermostat or controls made the AC hard to manage.' },
       ], 'The AC issue felt persistent, not just a brief fluctuation.'),
+      context,
     ),
 };
 
@@ -471,6 +512,209 @@ function latestDate(a: string | null, b: string | null): Date | null {
   if (!da) return db;
   if (!db) return da;
   return da > db ? da : db;
+}
+
+function splitDisplaySentences(text: string): string[] {
+  return stripHtml(text)
+    .match(/[^.!?\n]+[.!?]?/g)
+    ?.map(sentence => sentence.trim())
+    .filter(Boolean) ?? [];
+}
+
+function summariseDuration(days: number): string {
+  if (days >= 84) {
+    const months = Math.max(1, Math.round(days / 30));
+    return `${months} month${months === 1 ? '' : 's'}`;
+  }
+
+  if (days >= 14) {
+    const weeks = Math.max(2, Math.round(days / 7));
+    return `${weeks} week${weeks === 1 ? '' : 's'}`;
+  }
+
+  return `${days} day${days === 1 ? '' : 's'}`;
+}
+
+function getAttributeLabel(attribute: string): string {
+  return ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ');
+}
+
+function inferSentenceSentiment(sentence: string): 'positive' | 'negative' | 'neutral' {
+  const lower = sentence.toLowerCase();
+  const positiveHits = POSITIVE_CUES.reduce((count, cue) => count + (lower.includes(cue) ? 1 : 0), 0);
+  const negativeHits = NEGATIVE_CUES.reduce((count, cue) => count + (lower.includes(cue) ? 1 : 0), 0);
+
+  if (positiveHits > negativeHits && positiveHits > 0) return 'positive';
+  if (negativeHits > positiveHits && negativeHits > 0) return 'negative';
+  return 'neutral';
+}
+
+function sanitiseQuote(sentence: string): string | null {
+  const cleaned = stripHtml(sentence)
+    .replace(/\s+/g, ' ')
+    .replace(/^["'“”]+|["'“”]+$/g, '')
+    .trim();
+
+  if (!cleaned) {
+    return null;
+  }
+
+  return cleaned.length > 140 ? `${cleaned.slice(0, 137).trimEnd()}...` : cleaned;
+}
+
+function collectReviewEvidence(reviews: Review[], attribute: string): ReviewEvidence {
+  const keywords = ATTRIBUTE_KEYWORDS[attribute] ?? [];
+  if (keywords.length === 0) {
+    return {
+      mention_count: 0,
+      positive_count: 0,
+      negative_count: 0,
+      representative_quote: null,
+    };
+  }
+
+  let mention_count = 0;
+  let positive_count = 0;
+  let negative_count = 0;
+  let representative_quote: string | null = null;
+
+  for (const review of reviews) {
+    const reviewText = [review.review_title, review.review_text].filter(Boolean).join('. ').trim();
+    if (!reviewText) continue;
+
+    const matchingSentences = splitDisplaySentences(reviewText).filter(sentence =>
+      containsAny(sentence.toLowerCase(), keywords),
+    );
+
+    if (matchingSentences.length === 0) continue;
+
+    mention_count += 1;
+
+    let reviewPositive = 0;
+    let reviewNegative = 0;
+    for (const sentence of matchingSentences) {
+      const sentiment = inferSentenceSentiment(sentence);
+      if (sentiment === 'positive') reviewPositive += 1;
+      if (sentiment === 'negative') reviewNegative += 1;
+    }
+
+    if (reviewPositive > reviewNegative) positive_count += 1;
+    else if (reviewNegative > reviewPositive) negative_count += 1;
+
+    if (!representative_quote) {
+      representative_quote = sanitiseQuote(matchingSentences[0]);
+    }
+  }
+
+  return { mention_count, positive_count, negative_count, representative_quote };
+}
+
+function buildReviewStatEvidence(attribute: string, evidence: ReviewEvidence): string | null {
+  const dominantCount = Math.max(evidence.positive_count, evidence.negative_count);
+  if (
+    evidence.mention_count < REVIEW_STAT_MIN_MENTIONS ||
+    dominantCount < REVIEW_STAT_MIN_MENTIONS ||
+    dominantCount / evidence.mention_count < REVIEW_STAT_MIN_CONSENSUS
+  ) {
+    return null;
+  }
+
+  const sentiment = evidence.positive_count >= evidence.negative_count ? 'positive' : 'negative';
+  const percentage = Math.round((dominantCount / evidence.mention_count) * 100);
+  const phrase = ATTRIBUTE_STAT_PHRASES[attribute]?.[sentiment]
+    ?? `described ${getAttributeLabel(attribute)} ${sentiment === 'positive' ? 'positively' : 'negatively'}`;
+
+  return `${percentage}% of ${evidence.mention_count} reviews that mentioned ${getAttributeLabel(attribute)} ${phrase}.`;
+}
+
+function buildReviewQuoteEvidence(evidence: ReviewEvidence): string | null {
+  return evidence.representative_quote ? `Other users found that "${evidence.representative_quote}"` : null;
+}
+
+function buildHotelClaimEvidence(hotel: Hotel, attribute: string, gap?: AttributeGap): string | null {
+  const keywords = ATTRIBUTE_KEYWORDS[attribute] ?? [];
+  const descriptionCorpus = [hotel.property_description, hotel.area_description].filter(Boolean).join(' ');
+
+  if (descriptionCorpus) {
+    const matchingSentence = splitDisplaySentences(descriptionCorpus).find(sentence =>
+      containsAny(sentence.toLowerCase(), keywords),
+    );
+
+    if (matchingSentence) {
+      const quote = sanitiseQuote(matchingSentence);
+      if (quote) return `The hotel states that "${quote}"`;
+    }
+  }
+
+  if (gap?.amenity_claimed) {
+    const amenityLabel = AMENITY_LABELS[gap.amenity_claimed.toLowerCase()] ?? gap.amenity_claimed.replace(/_/g, ' ');
+    return `The hotel lists ${amenityLabel} as an amenity.`;
+  }
+
+  if (attribute === 'pet_policy' && hotel.pet_policy) {
+    return 'The hotel lists pet-related policies for guests traveling with animals.';
+  }
+
+  if (attribute === 'check_in' && hotel.check_in_end_time) {
+    return `The hotel lists a check-in window ending at ${hotel.check_in_end_time}.`;
+  }
+
+  return null;
+}
+
+function buildFallbackEvidence(attribute: string, gap?: AttributeGap): string {
+  if (gap?.decay_days) {
+    return `${getAttributeLabel(attribute)} has barely been mentioned in reviews for ${summariseDuration(gap.decay_days)}.`;
+  }
+
+  if (gap?.source !== 'decay') {
+    return `Recent reviews still leave a thin signal around ${getAttributeLabel(attribute)}.`;
+  }
+
+  return `Recent reviews have only a light signal around ${getAttributeLabel(attribute)}.`;
+}
+
+function buildEvidenceText(hotel: Hotel, reviews: Review[], attribute: string, gap?: AttributeGap): string {
+  const reviewEvidence = collectReviewEvidence(reviews, attribute);
+  return (
+    buildReviewStatEvidence(attribute, reviewEvidence)
+    ?? buildReviewQuoteEvidence(reviewEvidence)
+    ?? buildHotelClaimEvidence(hotel, attribute, gap)
+    ?? buildFallbackEvidence(attribute, gap)
+  );
+}
+
+function attributeMattersToUser(attribute: string, userTags: string[]): boolean {
+  return userTags.some(tag => (PERSONA_ATTRIBUTES[tag.trim()] ?? []).includes(attribute));
+}
+
+function buildQuestionReason(
+  attribute: string,
+  gap: AttributeGap | undefined,
+  userTags: string[],
+  variant: 'main' | 'narrowing' = 'main',
+): string {
+  if (variant === 'narrowing') {
+    return `You surfaced possible ${getAttributeLabel(attribute)} friction, so this follow-up narrows down what future guests should know.`;
+  }
+
+  if (gap?.source === 'both' && gap.decay_days && gap.amenity_claimed) {
+    return `The hotel advertises ${getAttributeLabel(attribute)}, but reviews have not refreshed that signal in ${summariseDuration(gap.decay_days)}.`;
+  }
+
+  if (gap?.source === 'decay' && gap.decay_days) {
+    return `${getAttributeLabel(attribute)} has not been mentioned in reviews for ${summariseDuration(gap.decay_days)} — your input helps refresh this signal.`;
+  }
+
+  if (gap?.source !== 'decay' && gap?.amenity_claimed) {
+    return `The hotel advertises ${getAttributeLabel(attribute)}, but recent reviews do not confirm how it holds up in practice.`;
+  }
+
+  if (attributeMattersToUser(attribute, userTags)) {
+    return 'This is a high-impact detail for your travel preferences, so a fresh signal helps future guests like you.';
+  }
+
+  return 'This detail still has a thin review signal, so your input helps future guests make a better call.';
 }
 
 // ─── Layer 1: Exponential decay + priority scoring ────────────────────────────
@@ -797,10 +1041,12 @@ function detectAttributeMentions(text: string): AttributeMention[] {
     });
 }
 
-function buildAgreementQuestion(feature_name: string, statement: string): AgreementQuestion {
+function buildAgreementQuestion(feature_name: string, statement: string, context: QuestionContext): AgreementQuestion {
   return {
     ui_type: 'Agreement',
     feature_name,
+    evidence_text: context.evidence_text,
+    reason: context.reason,
     statement,
     nlp_hints: [
       { keywords: ['yes', 'agree', 'accurate', 'true', 'exactly', 'definitely'], direction: 'right' },
@@ -896,6 +1142,7 @@ function buildPrimaryQuestion(
   attribute: string,
   userTags: string[],
   mode: 'verification' | 'problem',
+  context: QuestionContext,
   gap?: AttributeGap,
 ): FollowUpQuestion {
   const slider = SLIDER_CONFIG[attribute];
@@ -903,6 +1150,8 @@ function buildPrimaryQuestion(
     return {
       ui_type: 'Slider',
       feature_name: attribute,
+      evidence_text: context.evidence_text,
+      reason: context.reason,
       prompt: slider.prompt(userTags),
       left_label: slider.left_label,
       right_label: slider.right_label,
@@ -914,35 +1163,18 @@ function buildPrimaryQuestion(
     mode === 'problem'
       ? buildProblemStatement(attribute, userTags)
       : buildVerificationStatement(attribute, userTags, gap ?? { attribute, raw_score: 0, final_score: 0, source: 'decay' }),
+    context,
   );
 }
 
-function buildReasonQuestion(attribute: string, text: string, userTags: string[]): FollowUpQuestion {
+function buildReasonQuestion(attribute: string, text: string, userTags: string[], context: QuestionContext): FollowUpQuestion {
   const builder = REASON_PROMPTS[attribute];
-  if (builder) return builder(text, userTags);
+  if (builder) return builder(text, userTags, context);
   return buildAgreementQuestion(
     `${attribute}_reason`,
     `The problem with ${ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ')} felt persistent, not like a one-off inconvenience.`,
+    context,
   );
-}
-
-/**
- * Build a human-readable explanation of why this question was selected.
- * Shown in the FollowUpCard header so the reviewer understands the context.
- */
-function buildReason(attribute: string, gap: AttributeGap): string {
-  const label = ATTRIBUTE_LABELS[attribute] ?? attribute.replace(/_/g, ' ');
-  const cappedLabel = label.charAt(0).toUpperCase() + label.slice(1);
-  const freshnessPct = Math.round((gap.freshness_score ?? 0) * 100);
-  const stalenessPct = 100 - freshnessPct;
-
-  if (gap.source === 'blind_spot' || gap.source === 'both') {
-    return `The hotel lists ${label} as an amenity, but recent guests haven't commented on it — your input helps verify this.`;
-  }
-  if (gap.decay_days !== undefined) {
-    return `${cappedLabel} info is ${gap.decay_days} day${gap.decay_days === 1 ? '' : 's'} old (${stalenessPct}% stale) — your experience updates what future guests see.`;
-  }
-  return `${cappedLabel} hasn't been confirmed recently — your answer helps future travelers plan better.`;
 }
 
 function selectPositiveGap(rankedGaps: AttributeGap[], mentions: AttributeMention[]): AttributeGap | undefined {
@@ -1075,28 +1307,36 @@ export async function runFollowUpEngine(input: EngineInput): Promise<FollowUpEng
     const selectedGap = selectPositiveGap(rankedGaps, mentions);
     if (selectedGap) {
       selectedAttribute = selectedGap.attribute;
-      const q = buildPrimaryQuestion(selectedGap.attribute, userTags, 'verification', selectedGap);
-      questions = [{ ...q, reason: buildReason(selectedGap.attribute, selectedGap) }];
+      const context = {
+        evidence_text: buildEvidenceText(hotel, mergedReviews, selectedGap.attribute, selectedGap),
+        reason: buildQuestionReason(selectedGap.attribute, selectedGap, userTags),
+      };
+      questions = [buildPrimaryQuestion(selectedGap.attribute, userTags, 'verification', context, selectedGap)];
     }
   } else {
     const primaryAttribute = selectPrimaryNegativeAttribute(mentions, rankedGaps);
     if (primaryAttribute) {
       selectedAttribute = primaryAttribute;
       const matchingGap = rankedGaps.find(g => g.attribute === primaryAttribute);
-      const reason = matchingGap ? buildReason(primaryAttribute, matchingGap) : undefined;
-      const q1 = buildPrimaryQuestion(primaryAttribute, userTags, 'problem', matchingGap);
-      const q2 = buildReasonQuestion(primaryAttribute, reviewText, userTags);
-      questions = [{ ...q1, reason }, q2];
+      const mainContext = {
+        evidence_text: buildEvidenceText(hotel, mergedReviews, primaryAttribute, matchingGap),
+        reason: buildQuestionReason(primaryAttribute, matchingGap, userTags, 'main'),
+      };
+      const reasonContext = {
+        evidence_text: buildEvidenceText(hotel, mergedReviews, primaryAttribute, matchingGap),
+        reason: buildQuestionReason(primaryAttribute, matchingGap, userTags, 'narrowing'),
+      };
+      questions = [
+        buildPrimaryQuestion(primaryAttribute, userTags, 'problem', mainContext, matchingGap),
+        buildReasonQuestion(primaryAttribute, reviewText, userTags, reasonContext),
+      ];
     }
   }
-
-  const topGap = selectedAttribute ? rankedGaps.find(g => g.attribute === selectedAttribute) : undefined;
 
   return {
     review_id,
     property_id,
     questions,
-    reason: topGap ? buildReason(selectedAttribute!, topGap) : undefined,
     llm_prompt: buildGenerationSummary(reviewSentiment, rankedGaps, questions, selectedAttribute),
   };
 }
