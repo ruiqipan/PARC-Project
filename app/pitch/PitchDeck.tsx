@@ -90,7 +90,7 @@ const DecayChart = () => {
     const k = Math.log(2) / halfLife;
     let path = "M 0 0";
     for (let t = 0; t <= 365; t += 5) {
-      const y = 200 * (1 - Math.exp(-k * t));
+      const y = Math.round(200 * (1 - Math.exp(-k * t)) * 100) / 100;
       path += ` L ${t} ${y}`;
     }
     return path;
@@ -481,26 +481,30 @@ export default function PitchDeck() {
           <motion.p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">当用户完成那 1 秒钟的点击，算法引擎开始执行“反哺”流程，完成知识闭环。</motion.p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-          <div className="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-slate-800 -z-0"></div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           {[
             {
               step: "01",
-              t: "语义内化 (Ingestion)",
-              d: "将滑答数值和标签选择与追问上下文（Context）结合，转化为具备语义权重的结构化数据点。",
+              t: "语义挖掘 (Semantic Mining)",
+              d: "集成 LLM 对评论进行异步批量分析，通过关键词锚定将原始文本映射到具体酒店属性，提取每个维度的真实用户反馈信号。",
               icon: BrainCircuit
             },
             {
               step: "02",
-              t: "置信度融合 (Consolidation)",
-              d: "利用 Bayesian Update（贝叶斯更新）模型，根据该用户的历史信源可信度与现有后验分布，重新计算该属性的最终画像。",
-              icon: Cpu
+              t: "阈值触发 (Threshold Trigger)",
+              d: "每条新评论提交后实时更新属性的 last_mentioned_at 时间戳，结合指数衰减曲线计算 staleness 值，超出半衰期即触发置信度重评估。",
+              icon: Activity
             },
             {
               step: "03",
-              t: "图谱同步 (Graph Update)",
-              d: "更新 Property Knowledge Graph，同时激活相关搜索索引。例如：之前过时的「免费停车场」标签由于验证通过而重新点亮。",
+              t: "冲突消解 (Conflict Resolution)",
+              d: "对比酒店官方 Description 与用户评论的属性覆盖情况，识别「官方声称存在但评论从未提及」的盲点，作为追问优先级的重要权重。",
+              icon: Cpu
+            },
+            {
+              step: "04",
+              t: "闭环更新 (Closed-loop Update)",
+              d: "用户追问回答通过 EMA 算法（new = old×0.6 + answer×0.4）持续更新属性的 avg_score，推动酒店画像从静态展示向数据驱动的实时更新闭环演进。",
               icon: Database
             }
           ].map((item, idx) => (
@@ -515,16 +519,16 @@ export default function PitchDeck() {
 
         <div className="mt-16 flex flex-wrap justify-center gap-10 opacity-70">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-400">92%</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">数据准确率</div>
+            <div className="text-2xl font-bold text-blue-400">实时</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">新鲜度更新</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-400">实时</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">处理延迟</div>
+            <div className="text-2xl font-bold text-green-400">EMA</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">评分融合算法</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-purple-400">自动</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">自愈状态</div>
+            <div className="text-2xl font-bold text-purple-400">闭环</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">知识反哺机制</div>
           </div>
         </div>
       </Section>
