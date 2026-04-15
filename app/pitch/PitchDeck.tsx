@@ -607,6 +607,271 @@ export default function PitchDeck() {
         </div>
       </Section>
 
+      {/* Slide 6: UI Intelligence */}
+      <Section className="bg-white">
+        <div className="text-center mb-12">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="px-4 py-1 mb-6 inline-block rounded-full bg-blue-50 text-blue-700 text-xs font-bold tracking-widest uppercase"
+          >
+            产品化设计层
+          </motion.div>
+          <Title>UI Intelligence: Making Reviews Work For You</Title>
+          <Subtitle>将复杂算法转化为无感用户体验——每一次点击背后，都有系统在为你工作。</Subtitle>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+
+          {/* 1. Shared Tags */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.05 }}
+            className="p-7 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col gap-5"
+          >
+            <div>
+              <Users className="w-7 h-7 text-blue-600 mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Shared Tags</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">首页标签动态高亮与评论者的共同画像，帮助用户秒识"和我相关"的评论。</p>
+            </div>
+            {/* UI mock */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <div className="text-[10px] text-slate-400 font-mono mb-3 uppercase">Your profile</div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[
+                  { label: 'Business Traveler', match: true },
+                  { label: 'Light Sleeper', match: true },
+                  { label: 'Pet Owner', match: false },
+                  { label: 'Foodie', match: false },
+                ].map((tag, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.1 + i * 0.08 }}
+                    className={`text-[11px] px-2.5 py-1 rounded-full font-medium border ${
+                      tag.match
+                        ? 'bg-blue-100 text-blue-700 border-blue-200'
+                        : 'bg-white text-slate-400 border-slate-200'
+                    }`}
+                  >
+                    {tag.match && <span className="mr-1">✦</span>}{tag.label}
+                  </motion.span>
+                ))}
+              </div>
+              <div className="text-[10px] text-slate-400 font-mono mb-2 uppercase">Reviewer match</div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                <span className="text-xs text-blue-700 font-semibold">2 shared interests detected</span>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 2. Review Relevance */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="p-7 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col gap-5"
+          >
+            <div>
+              <Target className="w-7 h-7 text-blue-600 mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Review Relevance</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">通过画像匹配对评论相关性排序，在卡片上明确标注推荐原因。</p>
+            </div>
+            {/* UI mock */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+              {[
+                { score: 96, label: 'Highly relevant to you', color: 'bg-blue-500', tag: 'Business Traveler' },
+                { score: 72, label: 'Partially relevant', color: 'bg-amber-400', tag: 'Light Sleeper' },
+                { score: 31, label: 'General review', color: 'bg-slate-300', tag: null },
+              ].map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.15 + i * 0.1 }}
+                  className="bg-white rounded-xl p-3 border border-slate-100"
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-semibold text-slate-600">{item.label}</span>
+                    <span className="text-[10px] font-black font-mono text-slate-700">{item.score}%</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      whileInView={{ width: `${item.score}%` }}
+                      transition={{ duration: 0.8, delay: 0.3 + i * 0.1 }}
+                      className={`h-full rounded-full ${item.color}`}
+                    />
+                  </div>
+                  {item.tag && (
+                    <span className="mt-1.5 inline-block text-[9px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">{item.tag}</span>
+                  )}
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* 3. AI Polish */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="p-7 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col gap-5"
+          >
+            <div>
+              <Zap className="w-7 h-7 text-blue-600 mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">AI Polish</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">实时语言优化建议，让用户评论更清晰、更有参考价值。</p>
+            </div>
+            {/* UI mock: before / after */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+              <div className="bg-white rounded-xl p-3 border border-slate-200">
+                <div className="text-[9px] font-mono text-slate-400 mb-1.5 uppercase">Before</div>
+                <p className="text-xs text-slate-500 leading-relaxed line-through opacity-60">"The wifi was ok I guess, room was fine nothing special"</p>
+              </div>
+              <div className="flex justify-center">
+                <motion.div
+                  animate={{ y: [0, 3, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity }}
+                  className="text-blue-500 text-xs font-bold"
+                >
+                  ✦ AI Polished ↓
+                </motion.div>
+              </div>
+              <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+                <div className="text-[9px] font-mono text-blue-500 mb-1.5 uppercase">After</div>
+                <p className="text-xs text-slate-700 leading-relaxed">"WiFi speed was adequate for video calls. Room was comfortable but lacked standout features."</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 4. Smart Follow-up UI */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="p-7 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col gap-5"
+          >
+            <div>
+              <MessageSquare className="w-7 h-7 text-blue-600 mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Smart Follow-up UI</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">提交后自动生成 1–2 个低摩擦追问，滑块与标签完成作答，无需打字。</p>
+            </div>
+            {/* UI mock */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
+              <div className="text-[10px] text-slate-500 font-mono">How was the WiFi for work?</div>
+              <div className="relative">
+                <div className="w-full bg-slate-200 h-1.5 rounded-full" />
+                <motion.div
+                  initial={{ left: '20%' }}
+                  whileInView={{ left: '72%' }}
+                  transition={{ duration: 1, delay: 0.4, ease: 'easeOut' }}
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-blue-600 rounded-full shadow border-2 border-white"
+                  style={{ position: 'absolute' }}
+                />
+              </div>
+              <div className="flex justify-between text-[9px] text-slate-400 font-mono">
+                <span>Unusable</span><span>Excellent</span>
+              </div>
+              <div className="pt-1 text-[10px] text-slate-500 font-mono">What was the main noise source?</div>
+              <div className="flex flex-wrap gap-1.5">
+                {['Street traffic', 'AC / heating', 'Hallway', 'It was quiet'].map((opt, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0 }}
+                    whileInView={{ opacity: 1 }}
+                    transition={{ delay: 0.5 + i * 0.07 }}
+                    className={`text-[10px] px-2.5 py-1 rounded-full border cursor-pointer ${i === 3 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}
+                  >
+                    {opt}
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* 5. Multi-modal Input */}
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            className="p-7 rounded-3xl border border-slate-200 bg-white shadow-sm flex flex-col gap-5 md:col-span-2 xl:col-span-2"
+          >
+            <div>
+              <Layers className="w-7 h-7 text-blue-600 mb-3" />
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Multi-modal Input</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">评论支持图片、视频与语音输入，拖拽上传或一键录音，系统自动转录并提取属性信号。</p>
+            </div>
+            {/* UI mock */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Photo upload */}
+              <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
+                <span className="text-2xl">🖼️</span>
+                <div className="text-[10px] font-semibold text-slate-500">Photo</div>
+                <div className="text-[9px] text-slate-400">Drag & drop<br/>or tap to upload</div>
+                <div className="w-full bg-blue-100 rounded-full h-1 mt-1 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    whileInView={{ width: '75%' }}
+                    transition={{ duration: 1, delay: 0.4 }}
+                    className="h-full bg-blue-500 rounded-full"
+                  />
+                </div>
+                <div className="text-[9px] text-blue-600 font-mono">3 uploaded</div>
+              </div>
+              {/* Video */}
+              <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
+                <span className="text-2xl">🎬</span>
+                <div className="text-[10px] font-semibold text-slate-500">Video</div>
+                <div className="text-[9px] text-slate-400">Up to 60s<br/>auto-transcribed</div>
+                <div className="mt-1 flex gap-0.5">
+                  {[3,5,4,6,3,5,4,3].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ scaleY: 0 }}
+                      whileInView={{ scaleY: 1 }}
+                      transition={{ delay: 0.5 + i * 0.05 }}
+                      className="w-1 bg-amber-400 rounded-full origin-bottom"
+                      style={{ height: h * 3 }}
+                    />
+                  ))}
+                </div>
+                <div className="text-[9px] text-amber-600 font-mono">Transcribing…</div>
+              </div>
+              {/* Voice */}
+              <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
+                <motion.span
+                  animate={{ scale: [1, 1.15, 1] }}
+                  transition={{ duration: 1.2, repeat: Infinity }}
+                  className="text-2xl"
+                >
+                  🎙️
+                </motion.span>
+                <div className="text-[10px] font-semibold text-slate-500">Voice</div>
+                <div className="text-[9px] text-slate-400">Tap to record<br/>NLP auto-tags</div>
+                <div className="mt-1 flex gap-0.5 items-end">
+                  {[2,4,6,8,5,7,4,2].map((h, i) => (
+                    <motion.div
+                      key={i}
+                      animate={{ scaleY: [1, 1.5, 1] }}
+                      transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.08 }}
+                      className="w-1 bg-green-400 rounded-full origin-bottom"
+                      style={{ height: h * 3 }}
+                    />
+                  ))}
+                </div>
+                <div className="text-[9px] text-green-600 font-mono">● Recording</div>
+              </div>
+            </div>
+          </motion.div>
+
+        </div>
+      </Section>
+
       {/* Footer */}
       <footer className="py-12 text-center text-slate-400 bg-white border-t border-slate-200 snap-start">
         <p className="text-sm italic tracking-widest uppercase">PRISM by PARC Group</p>
