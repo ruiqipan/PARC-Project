@@ -201,7 +201,7 @@ export default function PitchDeck() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed"
           >
-            PRISM 的核心由两个相互协作的算法引擎组成：一个负责高效“索取”信息，另一个负责精炼“反哺”知识。
+            PRISM 的核心由两个相互协作的算法引擎组成：一个负责高效"索取"信息，另一个负责精炼"反哺"知识。
           </motion.p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -235,8 +235,8 @@ export default function PitchDeck() {
       <Section className="bg-slate-50">
         <div className="text-center mb-16">
           <motion.div className="text-blue-600 font-extrabold mb-4 uppercase tracking-widest text-lg">引擎 A - 属性角度 (检测层)</motion.div>
-          <Title>信息健康度检测：属性维度的“全能体检”</Title>
-          <Subtitle>系统在天亮扫描属性知识库，识别哪些地方需要“外部信息补给”。</Subtitle>
+          <Title>信息健康度检测：属性维度的"全能体检"</Title>
+          <Subtitle>系统在天亮扫描属性知识库，识别哪些地方需要"外部信息补给"。</Subtitle>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -304,7 +304,7 @@ export default function PitchDeck() {
         <div className="text-center mb-12">
           <motion.div className="text-blue-600 font-extrabold mb-4 uppercase tracking-widest text-lg">Freshness Calculation Architecture</motion.div>
           <Title>信息新鲜度如何被计算？</Title>
-          <Subtitle>PRISM 如何判断“哪些信息过时，下一步问什么问题”的底层实现</Subtitle>
+          <Subtitle>PRISM 如何判断"哪些信息过时，下一步问什么问题"的底层实现</Subtitle>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch relative">
@@ -427,7 +427,7 @@ export default function PitchDeck() {
         <div className="text-center mb-16">
           <motion.div className="text-blue-600 font-bold mb-2 uppercase tracking-wide">引擎 A - 用户角度 (匹配层)</motion.div>
           <motion.h2 className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight">智能追问匹配：找到对的人问对的话</motion.h2>
-          <motion.p className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed text-center">在识别到“问题”后，我们需要决定在哪个时刻、向哪个用户抛出 1—2 个问题。</motion.p>
+          <motion.p className="text-xl md:text-2xl text-slate-500 mb-12 max-w-3xl mx-auto leading-relaxed text-center">在识别到"问题"后，我们需要决定在哪个时刻、向哪个用户抛出 1—2 个问题。</motion.p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
@@ -451,7 +451,7 @@ export default function PitchDeck() {
                   <CheckCircle2 className="text-green-500 w-4 h-4" /> 待填任务：泳池 水温是否为恒温？
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CheckCircle2 className="text-green-500 w-4 h-4" /> 用户 Review 关键词：“带小孩玩水”、“洗衣室干净”
+                  <CheckCircle2 className="text-green-500 w-4 h-4" /> 用户 Review 关键词："带小孩玩水"、"洗衣室干净"
                 </div>
                 <div className="flex items-center gap-2 text-sm font-bold text-blue-600">
                   <ArrowRightLeft className="w-4 h-4" /> 触发追问（只需 1 秒点击）：告诉我们水温如何？
@@ -475,11 +475,87 @@ export default function PitchDeck() {
 
       {/* Slide 5: 知识更新引擎 */}
       <Section className="bg-slate-900 text-white">
-        <div className="mb-16 text-center">
+        <div className="mb-12 text-center">
           <motion.div className="text-blue-400 font-bold mb-2 uppercase tracking-wide">引擎 B - 知识反哺层</motion.div>
           <motion.h2 className="text-4xl md:text-5xl font-bold mb-6 text-white tracking-tight">知识更新引擎：从碎片答案到资产</motion.h2>
-          <motion.p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">当用户完成那 1 秒钟的点击，算法引擎开始执行“反哺”流程，完成知识闭环。</motion.p>
+          <motion.p className="text-xl md:text-2xl text-slate-400 mb-12 max-w-3xl mx-auto leading-relaxed">当用户完成那 1 秒钟的点击，算法引擎开始执行"反哺"流程，完成知识闭环。</motion.p>
         </div>
+
+        {/* Before & After 状态变迁图 */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+          className="mb-12 bg-slate-800/50 border border-slate-700 rounded-3xl p-8"
+        >
+          <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest mb-6 text-center">State Transition — Before &amp; After AI Intervention</div>
+          <div className="grid grid-cols-3 gap-4 items-center">
+
+            {/* BEFORE */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Before</div>
+              <div className="w-full bg-slate-700/60 border border-slate-600 rounded-2xl p-5 flex flex-col items-center gap-3">
+                <Database className="w-8 h-8 text-slate-400" />
+                <div className="text-[10px] text-slate-500 font-mono">静态知识库</div>
+                <div className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/40 rounded-xl px-4 py-2">
+                  <span className="text-lg">🏊</span>
+                  <span className="text-sm font-bold text-blue-300">游泳池</span>
+                  <span className="text-[10px] text-green-400 font-mono ml-1">✓ 已验证</span>
+                </div>
+                <div className="text-[10px] text-slate-600 font-mono text-center">last_mentioned: 180d ago<br/>avg_score: —</div>
+              </div>
+            </div>
+
+            {/* PROCESS */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Process</div>
+              <div className="flex flex-col items-center gap-2 w-full">
+                <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded-2xl w-full">
+                  <div className="flex items-center gap-2 mb-2">
+                    <BrainCircuit className="w-4 h-4 text-purple-400" />
+                    <span className="text-[10px] font-bold text-purple-300 uppercase">LLM 扫描评论</span>
+                  </div>
+                  <div className="space-y-1">
+                    {['「泳池这周没开」', '「维修中无法使用」', '「游泳池关闭了」'].map((t, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, x: -10 }}
+                        whileInView={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 + i * 0.15 }}
+                        className="text-[10px] text-slate-400 bg-slate-700/50 rounded px-2 py-1 font-mono"
+                      >{t}</motion.div>
+                    ))}
+                  </div>
+                </div>
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  whileInView={{ scaleX: 1 }}
+                  transition={{ duration: 0.5, delay: 0.8 }}
+                  className="w-full h-0.5 bg-gradient-to-r from-purple-500 to-amber-500 origin-left"
+                />
+                <div className="text-[10px] text-amber-400 font-mono text-center">{"staleness > 半衰期阈值"}<br />{"→ 触发置信度重评估"}</div>
+              </div>
+            </div>
+
+            {/* AFTER */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">After</div>
+              <div className="w-full bg-slate-700/60 border border-slate-600 rounded-2xl p-5 flex flex-col items-center gap-3">
+                <RefreshCw className="w-8 h-8 text-green-400" />
+                <div className="text-[10px] text-slate-500 font-mono">实时更新画像</div>
+                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-2">
+                  <span className="text-lg opacity-40">🏊</span>
+                  <span className="text-sm font-bold text-amber-300 line-through opacity-60">游泳池</span>
+                  <span className="text-[10px] text-amber-400 font-mono ml-1 font-bold">⚠ 待确认</span>
+                </div>
+                <div className="text-[10px] text-green-400 font-mono text-center bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-1.5">
+                  {"✓ 属性已更新"}<br />{"avg_score → 1.8 ↓"}
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative">
           {[
