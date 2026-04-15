@@ -4,6 +4,7 @@ import HotelDetailClient from './HotelDetailClient';
 import { Hotel, Review, UserPersona } from '@/types';
 import { getSession } from '@/lib/session';
 import { buildReviewsProcReviewKey } from '@/lib/review-enrichment';
+import { deriveReviewerTags, matchPersonaTags } from '@/lib/persona-match';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -36,6 +37,45 @@ function getReviewTimestamp(review: Review): number {
 
   const time = new Date(review.acquisition_date).getTime();
   return Number.isNaN(time) ? 0 : time;
+}
+
+function getReviewSimilarityScore(review: Review, userTags: string[]): number {
+  if (userTags.length === 0) {
+    return 0;
+  }
+
+  const reviewerTags = review.reviewer_tags?.length
+    ? review.reviewer_tags
+    : deriveReviewerTags(review);
+
+  if (reviewerTags.length === 0) {
+    return 0;
+  }
+
+  return matchPersonaTags(userTags, reviewerTags, userTags.length).length;
+}
+
+function sortReviews(reviews: Review[], userTags: string[]): Review[] {
+  return [...reviews].sort((a, b) => {
+    const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    const aHasContent = hasMeaningfulReviewContent(a);
+    const bHasContent = hasMeaningfulReviewContent(b);
+    if (aHasContent !== bHasContent) {
+      return aHasContent ? -1 : 1;
+    }
+
+    const similarityDelta =
+      getReviewSimilarityScore(b, userTags) - getReviewSimilarityScore(a, userTags);
+    if (similarityDelta !== 0) {
+      return similarityDelta;
+    }
+
+    return getReviewTimestamp(b) - getReviewTimestamp(a);
+  });
 }
 
 async function getHotelData(id: string) {
@@ -115,21 +155,7 @@ async function getHotelData(id: string) {
       };
     });
 
-    const reviews: Review[] = [...mappedSubmissions, ...mappedHistoricReviews]
-      .sort((a, b) => {
-        const priorityDelta = getReviewDisplayPriority(b) - getReviewDisplayPriority(a);
-        if (priorityDelta !== 0) {
-          return priorityDelta;
-        }
-
-        const aHasContent = hasMeaningfulReviewContent(a);
-        const bHasContent = hasMeaningfulReviewContent(b);
-        if (aHasContent !== bHasContent) {
-          return aHasContent ? -1 : 1;
-        }
-
-        return getReviewTimestamp(b) - getReviewTimestamp(a);
-      });
+    const reviews: Review[] = [...mappedSubmissions, ...mappedHistoricReviews];
 
     return { hotel: hotel as Hotel, reviews };
   } catch {
@@ -156,10 +182,12 @@ export default async function HotelDetailPage({ params }: PageProps) {
     userTags = ((persona as UserPersona | null)?.tags ?? []);
   }
 
+  const sortedReviews = sortReviews(data.reviews, userTags);
+
   return (
     <HotelDetailClient
       hotel={data.hotel}
-      reviews={data.reviews}
+      reviews={sortedReviews}
       userId={session?.userId}
       username={session?.username}
       userTags={userTags}

@@ -109,31 +109,30 @@ function AiHint({
 function SimilarityBadge({ matches }: { matches: PersonaMatch[] }) {
   if (matches.length === 0) return null;
 
-  // Group matches by their copy prefix so we can render them cleanly
-  const items = matches.map(m => {
+  const groupedItems = new Map<string, string[]>();
+
+  matches.forEach(m => {
     const prefix = badgeCopyPrefix(m.clusterId);
-    // If both tags are identical (exact match), show just one; otherwise show "userTag / reviewerTag"
     const tagDisplay =
       m.userTag.toLowerCase() === m.reviewerTag.toLowerCase()
         ? m.userTag
         : `${m.userTag} / ${m.reviewerTag}`;
-    return { prefix, tagDisplay };
+
+    const existing = groupedItems.get(prefix) ?? [];
+    existing.push(tagDisplay);
+    groupedItems.set(prefix, existing);
   });
 
+  const badgeText = Array.from(groupedItems.entries())
+    .map(([prefix, tagDisplays]) => `${prefix}: ${tagDisplays.join(' / ')}`)
+    .join(' / ');
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-      {items.map((item, i) => (
-        <span
-          key={i}
-          className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-200"
-        >
-          <Users className="size-3 shrink-0" aria-hidden />
-          <span>
-            <span className="font-semibold">{item.prefix}:</span>{' '}
-            {item.tagDisplay}
-          </span>
-        </span>
-      ))}
+    <div className="mt-1.5">
+      <span className="inline-flex max-w-full items-start gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">
+        <Users className="mt-0.5 size-3 shrink-0" aria-hidden />
+        <span className="min-w-0 break-words">{badgeText}</span>
+      </span>
     </div>
   );
 }
@@ -187,12 +186,13 @@ export default function ReviewCard({
     [userTags, resolvedReviewerTags],
   );
 
-  // Top 3 most relevant reviewer tags: matched tags first, then fill with unmatched
+  // Top 3 reviewer tags that add context beyond the shared-match badge.
   const topReviewerTags = useMemo(() => {
     if (resolvedReviewerTags.length === 0) return [];
-    const matchedTags = matches.map(m => m.reviewerTag);
-    const unmatched = resolvedReviewerTags.filter(t => !matchedTags.includes(t));
-    return [...matchedTags, ...unmatched].slice(0, 3);
+    const matchedTags = new Set(matches.map(m => m.reviewerTag.toLowerCase()));
+    return resolvedReviewerTags
+      .filter(tag => !matchedTags.has(tag.toLowerCase()))
+      .slice(0, 3);
   }, [resolvedReviewerTags, matches]);
   const displayTitle = review.review_title?.trim() || review.generated_title?.trim() || review.reviewer_name?.trim() || null;
   const showsAiTitle = !review.review_title?.trim() && Boolean(review.generated_title?.trim()) && review.title_was_ai_generated;
@@ -271,7 +271,10 @@ export default function ReviewCard({
             )}
           </div>
 
-          {/* Reviewer persona tags — top 3 most relevant to viewing user */}
+          {/* Feature 2: Similarity badge — sits right below the meta line */}
+          <SimilarityBadge matches={matches} />
+
+          {/* Reviewer persona tags — top 3 tags not already represented above */}
           {topReviewerTags.length > 0 && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               {topReviewerTags.map(tag => (
@@ -293,9 +296,6 @@ export default function ReviewCard({
               )}
             </div>
           )}
-
-          {/* Feature 2: Similarity badge — sits right below the meta line */}
-          <SimilarityBadge matches={matches} />
         </div>
 
         {/* Overall rating */}
