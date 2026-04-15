@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
+import { useVoiceInput } from '@/hooks/useVoiceInput';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -20,14 +21,14 @@ interface QAItem {
 // ── Static data ───────────────────────────────────────────────────────────────
 
 const QUICK_TAGS: QuickTag[] = [
-  { label: 'Location',    snippet: 'Located about 200m from the nearest subway station. ' },
-  { label: 'Facilities',  snippet: 'Hotel facilities are well-maintained and modern. ' },
-  { label: 'Cleanliness', snippet: 'Rooms were clean and tidy. ' },
-  { label: 'Service',     snippet: 'Staff were friendly and helpful. ' },
-  { label: 'WiFi',        snippet: 'WiFi was fast and reliable throughout the property. ' },
-  { label: 'Breakfast',   snippet: 'Breakfast options were varied and fresh. ' },
-  { label: 'Value',       snippet: 'Good value for the price paid. ' },
-  { label: 'Noise',       snippet: 'Rooms were quiet with minimal street noise. ' },
+  { label: 'Location',    snippet: 'Location: ' },
+  { label: 'Facilities',  snippet: 'Hotel facilities are ' },
+  { label: 'Cleanliness', snippet: 'Cleanliness: ' },
+  { label: 'Service',     snippet: 'Service: ' },
+  { label: 'WiFi',        snippet: 'WiFi: ' },
+  { label: 'Breakfast',   snippet: 'Breakfast: ' },
+  { label: 'Value',       snippet: 'Value for money: ' },
+  { label: 'Noise',       snippet: 'Noise level: ' },
 ];
 
 const QA_ITEMS: QAItem[] = [
@@ -66,6 +67,37 @@ export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: Rev
   // Q&A carousel index
   const [carouselIndex, setCarouselIndex] = useState(0);
   const visibleCount = 2; // cards visible at once
+
+  // Voice input
+  const { isListening, transcript, startListening, stopListening, isUnsupported } = useVoiceInput();
+  const prevTranscriptRef = useRef('');
+
+  // Append new voice transcript words into the textarea as they arrive
+  useEffect(() => {
+    if (!transcript) return;
+    const prev = prevTranscriptRef.current;
+    // Only append the newly recognised portion to avoid re-inserting existing text
+    const newPart = transcript.slice(prev.length);
+    if (newPart) {
+      setText(t => {
+        const base = t.trimEnd();
+        return base ? `${base} ${newPart}` : newPart;
+      });
+      setIsPolished(false);
+    }
+    prevTranscriptRef.current = transcript;
+  }, [transcript]);
+
+  function handleVoiceToggle() {
+    if (isListening) {
+      stopListening();
+      prevTranscriptRef.current = '';
+    } else {
+      prevTranscriptRef.current = '';
+      startListening();
+      focusTextarea();
+    }
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -277,24 +309,32 @@ export default function ReviewInput({ propertyId, userId, onSubmitSuccess }: Rev
         <div className="relative group">
           <button
             type="button"
-            aria-label="Voice dictation (coming soon)"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-400 text-xs hover:border-gray-300 hover:text-gray-500 transition-colors cursor-not-allowed"
+            onClick={handleVoiceToggle}
+            disabled={isUnsupported}
+            aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              isUnsupported
+                ? 'border-gray-200 text-gray-300 cursor-not-allowed'
+                : isListening
+                ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100 animate-pulse'
+                : 'border-gray-200 text-gray-500 hover:border-gray-300 hover:text-gray-700'
+            }`}
           >
-            {/* Mic icon */}
             <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="9" y="2" width="6" height="11" rx="3" />
               <path d="M5 10a7 7 0 0 0 14 0" />
               <line x1="12" y1="19" x2="12" y2="22" />
               <line x1="8" y1="22" x2="16" y2="22" />
             </svg>
-            Voice input
+            {isListening ? 'Listening…' : 'Voice input'}
           </button>
-          {/* Tooltip */}
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-10 pointer-events-none">
-            <div className="bg-gray-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap">
-              Voice dictation coming soon
+          {isUnsupported && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-10 pointer-events-none">
+              <div className="bg-gray-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap">
+                Not supported in this browser
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Polish / Undo row — pushed to right */}
