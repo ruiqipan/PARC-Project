@@ -125,12 +125,20 @@ const DecayChart = () => {
 };
 
 const BACKGROUND_COMMENTS = [
-  { text: '"WiFi was fast enough for back-to-back video calls."', tag: 'Business Traveler', x: '5%',  y: '12%', delay: 0.2 },
-  { text: '"Surprisingly quiet — slept better than at home."',    tag: 'Light Sleeper',    x: '60%', y: '8%',  delay: 0.5 },
-  { text: '"They actually welcomed our dog at check-in!"',        tag: 'Pet Owner',        x: '72%', y: '55%', delay: 0.8 },
-  { text: '"Check-in at 11pm was completely seamless."',          tag: 'Late Arrival',     x: '3%',  y: '62%', delay: 0.4 },
-  { text: '"Pool was open and warm — kids loved it."',            tag: 'Family Traveler',  x: '30%', y: '82%', delay: 0.9 },
-  { text: '"Breakfast had solid gluten-free options."',           tag: 'Dietary Needs',    x: '68%', y: '78%', delay: 0.6 },
+  // Top-left cluster
+  { text: '"WiFi fast enough for back-to-back video calls."',  tag: 'Business Traveler',  x: '2%',  y: '6%',  delay: 0.2 },
+  { text: '"Surprisingly quiet — slept better than at home."', tag: 'Light Sleeper',       x: '2%',  y: '22%', delay: 0.5 },
+  { text: '"Desk setup was perfect for remote work."',         tag: 'Remote Worker',       x: '2%',  y: '38%', delay: 0.7 },
+  // Top-right cluster
+  { text: '"Dog was welcomed with treats at check-in!"',       tag: 'Pet Owner',           x: '68%', y: '5%',  delay: 0.4 },
+  { text: '"Ramp access was clearly marked and easy."',        tag: 'Wheelchair User',     x: '68%', y: '20%', delay: 0.8 },
+  { text: '"Staff spoke Mandarin — huge relief for us."',      tag: 'International Guest', x: '68%', y: '35%', delay: 0.6 },
+  // Bottom-left cluster
+  { text: '"Check-in at 11pm was completely seamless."',       tag: 'Late Arrival',        x: '2%',  y: '65%', delay: 0.3 },
+  { text: '"Gluten-free breakfast options were plentiful."',   tag: 'Dietary Needs',       x: '2%',  y: '80%', delay: 0.9 },
+  // Bottom-right cluster
+  { text: '"Pool open till 10pm — kids were thrilled."',       tag: 'Family Traveler',     x: '68%', y: '65%', delay: 1.0 },
+  { text: '"Free parking made the road trip stress-free."',    tag: 'Road Tripper',        x: '68%', y: '80%', delay: 0.5 },
 ];
 
 // --- Final slide: scroll-in → card clears → floating comments → click Book Now → black + slogan ---
