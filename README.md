@@ -1,6 +1,6 @@
 # PARC Hotels
 
-PARC is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon. The app combines imported Expedia property/review data with app-authored reviews, lightweight username sessions, AI-assisted review polishing, conservative review enrichment, and a deterministic follow-up question engine.
+PARC is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon and submitted through the WAIAI Hack-AI-thon 2026 GitHub Classroom repository.
 
 ## What the app does
 
@@ -25,10 +25,10 @@ PARC is a persona-aware hotel review experience built for the Expedia Group Whar
 
 ### Pages
 
-- `/login` — username-based session start
-- `/onboarding` — persona tag creation and profile editing
-- `/` — hotel listing page
-- `/hotels/[id]` — hotel detail page with overview, amenities, policies, reviews
+- `/login` - username-based session start
+- `/onboarding` - persona tag creation and profile editing
+- `/` - hotel listing page
+- `/hotels/[id]` - hotel detail page with overview, amenities, policies, reviews
 
 ### Core app-managed tables
 
@@ -180,8 +180,8 @@ supabase/
 
 ## Documentation
 
-- Product requirements: [docs/PRD.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/PRD.md)
-- Technical overview: [docs/TECHNICAL_OVERVIEW.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/TECHNICAL_OVERVIEW.md)
+- Product requirements: `docs/PRD.md`
+- Technical overview: `docs/TECHNICAL_OVERVIEW.md`
 
 ## Important technical notes
 
