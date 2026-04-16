@@ -480,13 +480,13 @@ export default function PitchDeck() {
           </Card>
           <Card
             title="Engine B: Knowledge Update Algorithm"
-            description="Focus: Transforming fragmented user feedback into filtered, high-quality property knowledge assets."
+            description="Focus: Turning fragmented guest feedback into fresher, more defensible property signals."
             icon={RefreshCw}
           >
             <div className="mt-4 flex flex-wrap gap-2 text-slate-500">
               <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">Feature Extraction</span>
               <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">Confidence Assessment</span>
-              <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">Knowledge Graph Update</span>
+              <span className="bg-blue-50 text-blue-600 text-[10px] px-2 py-1 rounded">Property Insight Refresh</span>
             </div>
           </Card>
         </div>
@@ -497,7 +497,7 @@ export default function PitchDeck() {
         <div className="text-center mb-12">
           <motion.div className="text-blue-600 font-semibold mb-3 uppercase tracking-widest text-xs">Engine A — Attribute Layer (Detection)</motion.div>
           <Title>Information Health Detection</Title>
-          <Subtitle>The system scans the property knowledge base at dawn, identifying where external data is needed to fill gaps.</Subtitle>
+          <Subtitle>The system continuously evaluates which hotel attributes are stale, weakly verified, or missing useful guest evidence.</Subtitle>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -634,7 +634,7 @@ export default function PitchDeck() {
             <div className="space-y-4 pt-4">
               <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex items-center justify-between animate-pulse">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-400 uppercase">Current Top Priority</div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Example Candidate</div>
                   <div className="text-lg font-bold text-slate-900">Safety <span className="text-xs font-normal text-red-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-red-500 font-mono">9.8</div>
@@ -642,7 +642,7 @@ export default function PitchDeck() {
 
               <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-center justify-between">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-400 uppercase">High Priority</div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Illustrative Candidate</div>
                   <div className="text-lg font-bold text-slate-900">Wifi <span className="text-xs font-normal text-yellow-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-yellow-500 font-mono">7.2</div>
@@ -650,7 +650,7 @@ export default function PitchDeck() {
 
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between opacity-60">
                 <div>
-                  <div className="text-[10px] font-mono text-slate-400 uppercase">Low Priority</div>
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Lower Priority</div>
                   <div className="text-lg font-bold text-slate-900">Gym <span className="text-xs font-normal text-blue-500">(STALE)</span></div>
                 </div>
                 <div className="text-2xl font-black text-blue-500 font-mono">1.5</div>
@@ -662,7 +662,7 @@ export default function PitchDeck() {
                 <Zap className="w-4 h-4" /> Triggering Follow-up Questions
               </div>
               <div className="mt-4 text-[10px] font-mono text-slate-400 text-center">
-                Formula: risk_weight × staleness × persona_multiplier
+                Selection order: review/persona fit → hotel grounding → freshness → risk
               </div>
             </div>
           </div>
@@ -687,17 +687,17 @@ export default function PitchDeck() {
         <div className="text-center mb-12">
           <motion.div className="text-blue-600 font-semibold mb-3 uppercase tracking-widest text-xs">Engine A — User Layer (Matching)</motion.div>
           <motion.h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">Smart Matching: Right Person, Right Question</motion.h2>
-          <motion.p className="text-lg md:text-xl text-slate-500 mb-10 max-w-3xl mx-auto leading-relaxed text-center">Once a gap is detected, the system decides at which moment — and to which user — to surface 1–2 targeted questions.</motion.p>
+          <motion.p className="text-lg md:text-xl text-slate-500 mb-10 max-w-3xl mx-auto leading-relaxed text-center">Once a relevant topic is identified, the system decides when to surface 1–2 low-friction questions and which user context makes that question worth asking.</motion.p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-          <Card title="Decision Risk Ranking" icon={BarChart3} description="The system prioritizes follow-ups on factors with the greatest impact on future travelers' decisions. If noise is a known pain point for the attribute type, it ranks above minor amenities.">
-            <div className="text-[10px] text-slate-400 mt-4 border-t pt-4">Impact = Variance × Decision Weight</div>
+          <Card title="Decision Risk Ranking" icon={BarChart3} description="After review and persona fit identify eligible topics, hotel grounding, freshness, and risk help break ties between multiple relevant candidates.">
+            <div className="text-[10px] text-slate-400 mt-4 border-t pt-4">Tie-breakers: grounding → freshness → risk</div>
           </Card>
-          <Card title="User Relevance Matching" icon={Users} description="Semantic analysis of submitted reviews determines the user's actual experience boundaries. Follow-ups are only triggered for users who recently encountered the relevant scenario (e.g., swimming, breakfast).">
-            <div className="text-[10px] text-slate-400 mt-4 border-t pt-4">User Relevance Scoring Engine</div>
+          <Card title="User Relevance Matching" icon={Users} description="The engine combines the submitted review, the user's persona tags, and real hotel/review evidence. Negative reviews stay anchored to the same pain point; positive reviews can broaden into persona-relevant topics.">
+            <div className="text-[10px] text-slate-400 mt-4 border-t pt-4">Intersection → review_only → blind_spot → persona_only</div>
           </Card>
-          <Card title="Low-friction Interaction Design" icon={Zap} description="Avoids requiring users to type. Uses sliders (Likert Scale), multi-select tags, or tap labels — minimizing interaction cost. Core principle: Recognition over Recall.">
+          <Card title="Low-friction Interaction Design" icon={Zap} description="Uses sliders or Yes / Neutral / No controls as the primary path, with optional text and voice tucked behind a + action to keep the flow lightweight.">
             <div className="text-[10px] text-slate-400 mt-4 border-t pt-4">Recognition {'>'} Recall Principle</div>
           </Card>
         </div>
@@ -708,22 +708,33 @@ export default function PitchDeck() {
               <h4 className="text-lg font-semibold text-slate-900 mb-4">Matching Logic — Example</h4>
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CheckCircle2 className="text-green-500 w-4 h-4" /> Open task: Pool — Is the water temperature regulated?
+                  <CheckCircle2 className="text-green-500 w-4 h-4" /> Input signal: review mentions unstable WiFi
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CheckCircle2 className="text-green-500 w-4 h-4" /> User review keywords: "splashing with kids", "laundry room spotless"
+                  <CheckCircle2 className="text-green-500 w-4 h-4" /> Persona context: work-travel tags suggest connectivity matters
                 </div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-blue-600">
-                  <ArrowRightLeft className="w-4 h-4" /> Follow-up triggered (1-tap): Tell us how the water temperature was.
+                  <ArrowRightLeft className="w-4 h-4" /> Follow-up triggered: verify whether the WiFi was stable enough for real work.
                 </div>
               </div>
             </div>
             <div className="w-full md:w-64 bg-white p-6 rounded-2xl shadow-lg border border-blue-200">
                <p className="text-xs font-semibold text-slate-400 mb-3 uppercase">User-facing prompt</p>
-               <p className="text-sm font-medium mb-4">Was the pool water temperature comfortable?</p>
+               <p className="text-sm font-medium mb-4">The WiFi felt stable enough for work.</p>
+               <div className="grid grid-cols-3 gap-2 mb-4">
+                 {['No', 'Neutral', 'Yes'].map((label, index) => (
+                   <div
+                     key={label}
+                     className={`rounded-full border px-3 py-2 text-center text-[10px] font-semibold ${index === 2 ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-white text-slate-500'}`}
+                   >
+                     {label}
+                   </div>
+                 ))}
+               </div>
+               <p className="text-[10px] text-slate-500 font-mono mb-2">Optional follow-up detail</p>
                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                 <span>No</span>
-                 <span>Yes</span>
+                 <span>Unusable</span>
+                 <span>Stable</span>
                </div>
                <div className="w-full h-1 bg-slate-100 rounded-full relative">
                  <div className="absolute top-1/2 left-3/4 -translate-y-1/2 w-4 h-4 bg-blue-600 rounded-full shadow-md border-2 border-white"></div>
@@ -737,8 +748,8 @@ export default function PitchDeck() {
       <Section className="bg-slate-900 text-white">
         <div className="mb-12 text-center">
           <motion.div className="text-blue-400 font-semibold mb-3 uppercase tracking-widest text-xs">Engine B — Knowledge Feedback Layer</motion.div>
-          <motion.h2 className="text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight">Knowledge Update Engine: From Fragments to Assets</motion.h2>
-          <motion.p className="text-lg md:text-xl text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed">When a user completes that 1-second tap, the algorithm engine initiates the feedback loop, closing the knowledge cycle.</motion.p>
+          <motion.h2 className="text-4xl md:text-5xl font-bold mb-4 text-white tracking-tight">Knowledge Update Engine: From Guest Signals to Property State</motion.h2>
+          <motion.p className="text-lg md:text-xl text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed">When a user submits a review or completes a follow-up, PRISM updates freshness state and can suppress hotel claims that are contradicted by enough direct guest evidence.</motion.p>
         </div>
 
         {/* Before & After State Transition */}
@@ -756,13 +767,13 @@ export default function PitchDeck() {
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Before</div>
               <div className="w-full bg-slate-700/60 border border-slate-600 rounded-2xl p-5 flex flex-col items-center gap-3">
                 <Database className="w-8 h-8 text-slate-400" />
-                <div className="text-[10px] text-slate-500 font-mono">Static Knowledge Base</div>
+                <div className="text-[10px] text-slate-500 font-mono">Listed hotel claim</div>
                 <div className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/40 rounded-xl px-4 py-2">
-                  <span className="text-lg">🏊</span>
-                  <span className="text-sm font-bold text-blue-300">Pool</span>
-                  <span className="text-[10px] text-green-400 font-mono ml-1">✓ Verified</span>
+                  <span className="text-lg">🍳</span>
+                  <span className="text-sm font-bold text-blue-300">Breakfast Included</span>
+                  <span className="text-[10px] text-blue-300 font-mono ml-1">Listed</span>
                 </div>
-                <div className="text-[10px] text-slate-600 font-mono text-center">last_mentioned: 180d ago<br/>avg_score: —</div>
+                <div className="text-[10px] text-slate-600 font-mono text-center">Recent direct confirmation is weak</div>
               </div>
             </div>
 
@@ -773,10 +784,10 @@ export default function PitchDeck() {
                 <div className="p-3 bg-purple-500/20 border border-purple-500/30 rounded-2xl w-full">
                   <div className="flex items-center gap-2 mb-2">
                     <BrainCircuit className="w-4 h-4 text-purple-400" />
-                    <span className="text-[10px] font-bold text-purple-300 uppercase">LLM Review Scan</span>
+                    <span className="text-[10px] font-bold text-purple-300 uppercase">Guest signal collection</span>
                   </div>
                   <div className="space-y-1">
-                    {['Pool closed this week', 'Under maintenance', 'Swimming pool is shut'].map((t, i) => (
+                    {['Breakfast was not included', 'We had to pay extra for breakfast', 'No breakfast came with the stay'].map((t, i) => (
                       <motion.div
                         key={i}
                         initial={{ opacity: 0, x: -10 }}
@@ -793,7 +804,7 @@ export default function PitchDeck() {
                   transition={{ duration: 0.5, delay: 0.8 }}
                   className="w-full h-0.5 bg-gradient-to-r from-purple-500 to-amber-500 origin-left"
                 />
-                <div className="text-[10px] text-amber-400 font-mono text-center">{"staleness > half-life threshold"}<br />{"→ triggers confidence re-evaluation"}</div>
+                <div className="text-[10px] text-amber-400 font-mono text-center">{"contradicting direct guest signals reach threshold"}<br />{"→ listed claim becomes hidden until support returns"}</div>
               </div>
             </div>
 
@@ -802,14 +813,14 @@ export default function PitchDeck() {
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">After</div>
               <div className="w-full bg-slate-700/60 border border-slate-600 rounded-2xl p-5 flex flex-col items-center gap-3">
                 <RefreshCw className="w-8 h-8 text-green-400" />
-                <div className="text-[10px] text-slate-500 font-mono">Real-time Property Profile</div>
+                <div className="text-[10px] text-slate-500 font-mono">Updated property state</div>
                 <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/40 rounded-xl px-4 py-2">
-                  <span className="text-lg opacity-40">🏊</span>
-                  <span className="text-sm font-bold text-amber-300 line-through opacity-60">Pool</span>
-                  <span className="text-[10px] text-amber-400 font-mono ml-1 font-bold">⚠ Pending</span>
+                  <span className="text-lg opacity-40">🍳</span>
+                  <span className="text-sm font-bold text-amber-300 line-through opacity-60">Breakfast Included</span>
+                  <span className="text-[10px] text-amber-400 font-mono ml-1 font-bold">⚠ Hidden</span>
                 </div>
                 <div className="text-[10px] text-green-400 font-mono text-center bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-1.5">
-                  {"✓ Attribute updated"}<br />{"avg_score → 1.8 ↓"}
+                  {"✓ Freshness state updated"}<br />{"claim visibility adjusted"}
                 </div>
               </div>
             </div>
@@ -821,26 +832,26 @@ export default function PitchDeck() {
           {[
             {
               step: "01",
-              t: "Semantic Mining",
-              d: "Integrates LLM for async batch analysis of reviews, mapping raw text to specific hotel attributes via keyword anchoring to extract real user feedback signals across each dimension.",
+              t: "Signal Collection",
+              d: "Collects direct guest signals from submitted review text and structured follow-up answers, focusing on which hotel attributes were mentioned and how they were described.",
               icon: BrainCircuit
             },
             {
               step: "02",
-              t: "Threshold Trigger",
-              d: "Every new review updates the attribute's last_mentioned_at timestamp in real time. Combined with an exponential decay curve, a staleness score is computed; exceeding the half-life threshold triggers confidence re-evaluation.",
+              t: "Freshness Update",
+              d: "Each new review can refresh last_mentioned_at, and each answered follow-up can refresh last_confirmed_at while updating avg_score with an EMA for scored attributes.",
               icon: Activity
             },
             {
               step: "03",
-              t: "Conflict Resolution",
-              d: "Compares official hotel descriptions against user review attribute coverage. Identifies 'officially claimed but never mentioned in reviews' blind spots, used as a major weight in follow-up prioritization.",
+              t: "Claim Suppression",
+              d: "Compares listed hotel claims against direct guest signals. When enough recent user evidence contradicts a listed claim, the claim can be hidden until supporting evidence returns.",
               icon: Cpu
             },
             {
               step: "04",
-              t: "Closed-loop Update",
-              d: "User follow-up answers continuously update the attribute's avg_score via the EMA algorithm (new = old×0.6 + answer×0.4), driving the property profile from static display toward a data-driven, continuously evolving knowledge loop.",
+              t: "Closed-loop Refresh",
+              d: "Freshness state, scored follow-up answers, and suppressed claims all feed back into future prioritization, helping PRISM ask better questions and show more trustworthy hotel information over time.",
               icon: Database
             }
           ].map((item, idx) => (
@@ -853,18 +864,18 @@ export default function PitchDeck() {
           ))}
         </div>
 
-        <div className="mt-16 flex flex-wrap justify-center gap-10 opacity-70">
+          <div className="mt-16 flex flex-wrap justify-center gap-10 opacity-70">
           <div className="text-center">
-            <div className="text-xl font-bold text-blue-400">Real-time</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Freshness Update</div>
+            <div className="text-xl font-bold text-blue-400">Freshness</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">State Tracking</div>
           </div>
           <div className="text-center">
             <div className="text-xl font-bold text-green-400">EMA</div>
             <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Score Fusion Algorithm</div>
           </div>
           <div className="text-center">
-            <div className="text-xl font-bold text-purple-400">Closed-loop</div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Knowledge Feedback</div>
+            <div className="text-xl font-bold text-purple-400">Suppression</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-1">Claim Hygiene</div>
           </div>
         </div>
       </Section>
@@ -941,7 +952,7 @@ export default function PitchDeck() {
             <div>
               <Target className="w-7 h-7 text-blue-600 mb-3" />
               <h3 className="text-lg font-bold text-slate-900 mb-1">Review Relevance</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Ranks reviews by persona match and clearly labels the recommendation reason on each card.</p>
+              <p className="text-xs text-slate-500 leading-relaxed">Ranks reviews by exact shared tags and semantic cluster matches, using cached enrichment tags when available, and clearly labels the recommendation reason on each card.</p>
             </div>
             {/* UI mock */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
@@ -987,13 +998,13 @@ export default function PitchDeck() {
             <div>
               <Zap className="w-7 h-7 text-blue-600 mb-3" />
               <h3 className="text-lg font-bold text-slate-900 mb-1">AI Polish</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Real-time language enhancement suggestions that make reviews clearer and more useful for future travelers.</p>
+              <p className="text-xs text-slate-500 leading-relaxed">On-demand AI polishing rewrites rough notes into clearer review text without inventing new facts.</p>
             </div>
             {/* UI mock: before / after */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
               <div className="bg-white rounded-xl p-3 border border-slate-200">
                 <div className="text-[9px] font-mono text-slate-400 mb-1.5 uppercase">Before</div>
-                <p className="text-xs text-slate-500 leading-relaxed line-through opacity-60">"The wifi was ok I guess, room was fine nothing special"</p>
+                <p className="text-xs text-slate-500 leading-relaxed line-through opacity-60">&ldquo;The wifi was ok I guess, room was fine nothing special&rdquo;</p>
               </div>
               <div className="flex justify-center">
                 <motion.div
@@ -1006,7 +1017,7 @@ export default function PitchDeck() {
               </div>
               <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
                 <div className="text-[9px] font-mono text-blue-500 mb-1.5 uppercase">After</div>
-                <p className="text-xs text-slate-700 leading-relaxed">"WiFi speed was adequate for video calls. Room was comfortable but lacked standout features."</p>
+                <p className="text-xs text-slate-700 leading-relaxed">&ldquo;WiFi speed was adequate for video calls. Room was comfortable but lacked standout features.&rdquo;</p>
               </div>
             </div>
           </motion.div>
@@ -1021,7 +1032,7 @@ export default function PitchDeck() {
             <div>
               <MessageSquare className="w-7 h-7 text-blue-600 mb-3" />
               <h3 className="text-lg font-bold text-slate-900 mb-1">Smart Follow-up UI</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Automatically generates 1–2 low-friction follow-up questions after submission. Answered via sliders and tags — no typing required.</p>
+              <p className="text-xs text-slate-500 leading-relaxed">Automatically generates 1–2 low-friction follow-up questions after submission. Answered via sliders or Yes / Neutral / No controls, with optional text and voice if needed.</p>
             </div>
             {/* UI mock */}
             <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 space-y-3">
@@ -1039,15 +1050,15 @@ export default function PitchDeck() {
               <div className="flex justify-between text-[9px] text-slate-400 font-mono">
                 <span>Unusable</span><span>Excellent</span>
               </div>
-              <div className="pt-1 text-[10px] text-slate-500 font-mono">What was the main noise source?</div>
-              <div className="flex flex-wrap gap-1.5">
-                {['Street traffic', 'AC / heating', 'Hallway', 'It was quiet'].map((opt, i) => (
+              <div className="pt-1 text-[10px] text-slate-500 font-mono">The WiFi felt stable enough for work.</div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {['No', 'Neutral', 'Yes'].map((opt, i) => (
                   <motion.span
-                    key={i}
+                    key={opt}
                     initial={{ opacity: 0 }}
                     whileInView={{ opacity: 1 }}
                     transition={{ delay: 0.5 + i * 0.07 }}
-                    className={`text-[10px] px-2.5 py-1 rounded-full border cursor-pointer ${i === 3 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}
+                    className={`text-[10px] px-2.5 py-2 rounded-full border text-center ${i === 2 ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-500 border-slate-200'}`}
                   >
                     {opt}
                   </motion.span>
@@ -1056,7 +1067,7 @@ export default function PitchDeck() {
             </div>
           </motion.div>
 
-          {/* 5. Multi-modal Input */}
+          {/* 5. Guided Drafting + Voice */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -1065,16 +1076,16 @@ export default function PitchDeck() {
           >
             <div>
               <Layers className="w-7 h-7 text-blue-600 mb-3" />
-              <h3 className="text-lg font-bold text-slate-900 mb-1">Multi-modal Input</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">Reviews support photo, video, and voice input. Drag-and-drop or one-tap recording — the system auto-transcribes and extracts attribute signals.</p>
+              <h3 className="text-lg font-bold text-slate-900 mb-1">Guided Drafting + Voice</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">Review drafting combines quick tags, prompt seeds, voice dictation, and optional AI polishing to lower the effort of writing useful feedback.</p>
             </div>
             {/* UI mock */}
             <div className="grid grid-cols-3 gap-3">
-              {/* Photo upload */}
+              {/* Quick tags */}
               <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
-                <span className="text-2xl">🖼️</span>
-                <div className="text-[10px] font-semibold text-slate-500">Photo</div>
-                <div className="text-[9px] text-slate-400">Drag & drop<br/>or tap to upload</div>
+                <span className="text-2xl">🏷️</span>
+                <div className="text-[10px] font-semibold text-slate-500">Quick Tags</div>
+                <div className="text-[9px] text-slate-400">Tap to insert<br/>WiFi, Breakfast, Noise</div>
                 <div className="w-full bg-blue-100 rounded-full h-1 mt-1 overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
@@ -1083,13 +1094,13 @@ export default function PitchDeck() {
                     className="h-full bg-blue-500 rounded-full"
                   />
                 </div>
-                <div className="text-[9px] text-blue-600 font-mono">3 uploaded</div>
+                <div className="text-[9px] text-blue-600 font-mono">8 ready</div>
               </div>
-              {/* Video */}
+              {/* Prompt seeds */}
               <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
-                <span className="text-2xl">🎬</span>
-                <div className="text-[10px] font-semibold text-slate-500">Video</div>
-                <div className="text-[9px] text-slate-400">Up to 60s<br/>auto-transcribed</div>
+                <span className="text-2xl">💬</span>
+                <div className="text-[10px] font-semibold text-slate-500">Prompt Seeds</div>
+                <div className="text-[9px] text-slate-400">Tap a question<br/>to prefill the draft</div>
                 <div className="mt-1 flex gap-0.5">
                   {[3,5,4,6,3,5,4,3].map((h, i) => (
                     <motion.div
@@ -1102,7 +1113,7 @@ export default function PitchDeck() {
                     />
                   ))}
                 </div>
-                <div className="text-[9px] text-amber-600 font-mono">Transcribing…</div>
+                <div className="text-[9px] text-amber-600 font-mono">6 prompts ready</div>
               </div>
               {/* Voice */}
               <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center">
@@ -1114,7 +1125,7 @@ export default function PitchDeck() {
                   🎙️
                 </motion.span>
                 <div className="text-[10px] font-semibold text-slate-500">Voice</div>
-                <div className="text-[9px] text-slate-400">Tap to record<br/>NLP auto-tags</div>
+                <div className="text-[9px] text-slate-400">Tap to record<br/>dictation goes into the draft</div>
                 <div className="mt-1 flex gap-0.5 items-end">
                   {[2,4,6,8,5,7,4,2].map((h, i) => (
                     <motion.div
