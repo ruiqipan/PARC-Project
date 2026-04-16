@@ -1,94 +1,98 @@
-# PARC Hotels
+# PRISM
 
-PARC is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon. The app combines imported Expedia property/review data with app-authored reviews, lightweight username sessions, AI-assisted review polishing, conservative review enrichment, and a deterministic follow-up question engine.
+PRISM is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon. It helps travelers find the reviews that matter most to them, lowers the friction of writing useful reviews, and refreshes stale hotel knowledge through targeted follow-up questions.
 
-## What the app does
+## Live App
 
-- Lets a user create a lightweight profile of travel needs and preferences.
-- Ranks hotel reviews higher when they share more persona-tag commonality with the current user.
-- Generates conservative AI review titles and tags for review cards that would otherwise be too sparse to scan.
-- Lets users write reviews with quick prompts, voice dictation, optional AI polish, and translation.
-- After a review is submitted, generates 1-2 follow-up questions to refresh stale or decision-critical property information.
+- Login and demo entry point: [https://parc-project.vercel.app/login](https://parc-project.vercel.app/login)
 
-## Current stack
+## What PRISM Does
+
+- Builds lightweight traveler personas from curated and custom tags.
+- Reorders hotel reviews so persona-aligned reviews surface first.
+- Makes sparse reviews easier to scan with conservative AI-generated titles and tags.
+- Supports low-friction review writing with guided prompts, voice dictation, optional AI polish, and translation.
+- Generates persona-aware follow-up questions to verify missing, stale, or disputed hotel information.
+- Suppresses hotel-listed tags when enough recent guest evidence contradicts them.
+
+## Product Snapshot
+
+PRISM is designed around three product loops:
+
+1. **Personalized reading**
+   Review ranking and similarity badges help travelers focus on reviews from guests with similar priorities.
+
+2. **Low-friction writing**
+   Guided drafting tools make it easier to leave structured, useful feedback without forcing users into long-form writing.
+
+3. **Reality calibration**
+   Follow-up questions and hotel-claim suppression help the platform keep property information fresh and trustworthy over time.
+
+## Core User Flows
+
+### 1. Login and onboarding
+
+1. A new or returning user enters a username on `/login`.
+2. The app restores or creates a stable `user_id`.
+3. The user is sent to `/onboarding` to select persona tags.
+4. Tags are stored in `User_Personas`.
+
+### 2. Hotel browsing and review reading
+
+1. The homepage loads hotels from imported Expedia-style property data.
+2. The hotel page merges imported reviews with app-authored reviews.
+3. Reviews are ranked so higher-quality, persona-aligned reviews appear first.
+4. Only the visible review slice is enriched for display with conservative AI-generated titles and tags.
+
+### 3. Review writing and follow-up
+
+1. A user drafts a review with quick tags, seeded prompts, optional voice input, and AI polish.
+2. The review is saved to `Review_Submissions`.
+3. PRISM generates one or two follow-up questions:
+   - negative reviews stay anchored to the reported issue
+   - positive reviews can expand into persona-relevant, evidence-backed topics
+4. Follow-up answers are saved to `FollowUp_Answers`.
+
+## Tech Stack
 
 | Layer | Implementation |
 | --- | --- |
 | Framework | Next.js 16.2.3 App Router |
 | UI | React 19, Tailwind CSS v4, Framer Motion |
 | Database | Supabase / PostgreSQL |
-| Session model | Cookie-based username session (`parc_user_id`, `parc_username`) |
-| LLM usage | OpenAI `gpt-4o` for polish + translation, `gpt-5-nano` for review enrichment |
+| Session model | Cookie-based username session |
+| LLM usage | OpenAI models for polish, translation, enrichment, and follow-up wording |
 | Voice input | Browser Web Speech API |
 
-## Runtime architecture
+## Data Model
 
-### Pages
+### Imported read-only tables
 
-- `/login` — username-based session start
-- `/onboarding` — persona tag creation and profile editing
-- `/` — hotel listing page
-- `/hotels/[id]` — hotel detail page with overview, amenities, policies, reviews
+- `Description_PROC`
+- `Reviews_PROC`
 
-### Core app-managed tables
+### App-managed tables
 
 - `User_Personas`
 - `Review_Submissions`
 - `Review_Enrichments`
 - `FollowUp_Answers`
 
-### Imported source-of-truth tables
+The application reads property and historical review data from the imported tables and stores all app-authored state in the app-managed tables.
 
-- `Description_PROC`
-- `Reviews_PROC`
-
-The app reads from the imported Expedia-style tables and writes all user-generated or AI-generated metadata into app-managed tables. It does not mutate `Description_PROC` or `Reviews_PROC`.
-
-## Key product flows
-
-### Session and persona flow
-
-1. User lands on the app.
-2. Middleware-style proxy redirects unauthenticated users to `/login`.
-3. Login creates or restores a stable `User_Personas.user_id`.
-4. User completes `/onboarding`, which writes selected tags and categories back to `User_Personas`.
-
-### Review browsing flow
-
-1. Hotel detail page loads imported reviews plus app-authored `Review_Submissions`.
-2. Reviews are sorted by:
-   - content completeness,
-   - meaningful content presence,
-   - persona-match strength,
-   - recency.
-3. The visible review slice is enriched on demand via `POST /api/reviews/enrich`.
-4. Review cards show:
-   - conservative AI-generated title/tag hints when applicable,
-   - persona similarity badge,
-   - reviewer tags that are not already represented in the similarity badge.
-
-### Review creation flow
-
-1. User writes a review with quick tags, seeded Q&A prompts, star rating, and optional voice dictation.
-2. Optional AI polish rewrites the review while preserving only explicitly stated facts.
-3. Review is inserted into `Review_Submissions`.
-4. If the user is logged in, the follow-up engine returns 1-2 additional questions.
-5. Answers are persisted to `FollowUp_Answers`.
-
-## API surface
+## API Surface
 
 | Method | Route | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/session/login` | Start or restore a username-based session |
-| `POST` | `/api/session/logout` | Clear PARC session cookies |
-| `POST` | `/api/ai-polish` | Turn rough guest notes into a cleaner review without adding facts |
-| `POST` | `/api/reviews/translate` | Translate review text into a requested target language |
-| `POST` | `/api/reviews/enrich` | Read or generate cached review titles/tags for the currently visible review slice |
-| `POST` | `/api/reviews/follow-up` | Run the deterministic 4-layer follow-up engine |
+| `POST` | `/api/session/logout` | Clear PRISM session cookies |
+| `POST` | `/api/ai-polish` | Rewrite rough review notes without adding facts |
+| `POST` | `/api/reviews/translate` | Translate review text into a requested language |
+| `POST` | `/api/reviews/enrich` | Fetch or generate cached title/tag enrichments |
+| `POST` | `/api/reviews/follow-up` | Select follow-up topics and generate follow-up wording |
 | `POST` | `/api/reviews/follow-up/answers` | Persist follow-up answers |
-| `POST` | `/api/personas` | Legacy route currently present in repo but not used by the active onboarding flow |
 
-## Local development
+## Local Development
 
 ### 1. Install dependencies
 
@@ -107,21 +111,21 @@ OPENAI_API_KEY=...
 
 Notes:
 
-- `SUPABASE_SERVICE_ROLE_KEY` is strongly recommended for server routes and background enrichment.
-- `OPENAI_API_KEY` is only used server-side.
+- `SUPABASE_SERVICE_ROLE_KEY` is recommended for server routes and enrichment flows.
+- `OPENAI_API_KEY` is used only on the server.
 
 ### 3. Prepare the database
 
-Import the CSV-backed source tables into Supabase using the exact table names expected by the app:
+Import the source tables into Supabase using the exact names expected by the app:
 
 - `Description_PROC`
 - `Reviews_PROC`
 
-For a fresh project, run the SQL in:
+Then apply:
 
 - `supabase/migrations/app_tables.sql`
 
-For an existing database that predates the latest app tables, also apply:
+If your database predates the latest schema updates, also apply:
 
 - `supabase/migrations/20260414_add_username_to_user_personas.sql`
 - `supabase/migrations/20260415_add_review_enrichments.sql`
@@ -132,13 +136,13 @@ For an existing database that predates the latest app tables, also apply:
 npm run dev
 ```
 
-### 5. Verify production build
+### 5. Verify the production build
 
 ```bash
 npm run build
 ```
 
-## Repo layout
+## Repository Layout
 
 ```text
 app/
@@ -153,6 +157,7 @@ app/
   hotels/[id]/
   login/
   onboarding/
+  pitch/
 
 components/
   auth/
@@ -160,33 +165,36 @@ components/
   onboarding/
   ui/
 
+docs/
+  PRD.md
+  TECHNICAL_OVERVIEW.md
+
 lib/
   follow-up-engine.ts
+  hotel-claim-suppression.ts
   hotel-visuals.ts
   persona-match.ts
   review-enrichment.ts
+  review-ranking.ts
   session.ts
   supabase.ts
-  utils.ts
 
 scripts/
   backfill-review-enrichments.cjs
 
 supabase/
   migrations/
-  schema.sql
-  prd_schema.sql
 ```
 
 ## Documentation
 
-- Product requirements: [docs/PRD.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/PRD.md)
-- Technical overview: [docs/TECHNICAL_OVERVIEW.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/TECHNICAL_OVERVIEW.md)
+- Product requirements: [docs/PRD.md](docs/PRD.md)
+- Technical overview: [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)
+- Team onboarding notes: [ONBOARDING.md](ONBOARDING.md)
 
-## Important technical notes
+## Notes
 
-- Review enrichment is intentionally conservative. Empty enrichment rows can still be valid cache results.
-- The follow-up engine is currently deterministic and heuristic-driven at runtime. It does not call an LLM to generate the live question text.
-- `Review_Enrichments` is designed as a display cache, not as a source-of-truth content table.
-- The repo still contains one legacy API route (`/api/personas`) that does not match the active session-cookie contract.
-- The checked-in `Review_Submissions` schema reference currently lags behind the live write path: the app code writes `username` and `rating`, so fresh environments should validate those columns before relying on the setup docs alone.
+- Review enrichment is intentionally conservative. Empty enrichment results can still be valid cache entries.
+- Follow-up topic selection is grounded and deterministic; the final question wording is generated at request time.
+- The repo still contains a legacy `/api/personas` route that is not used by the active onboarding flow.
+- The checked-in schema references should be validated against the live Supabase schema before production deployment.

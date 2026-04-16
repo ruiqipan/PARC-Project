@@ -1,15 +1,15 @@
 # Technical Overview
 
-This document reflects the current implementation in the repository as of 2026-04-15. It is intentionally implementation-oriented and complements the higher-level PRD.
+This document reflects the current implementation in the repository as of 2026-04-15. It complements the higher-level PRD and is written for contributors who need an accurate snapshot of how the application works today.
 
 ## 1. System Overview
 
-PARC is a Next.js App Router application that reads hotel metadata and historical reviews from Supabase, layers app-authored state on top, and uses a small set of server-side OpenAI calls to improve review readability and collect structured follow-up information.
+PRISM is a Next.js App Router application that reads hotel metadata and historical reviews from Supabase, layers app-authored state on top, and uses a focused set of server-side OpenAI calls to improve review readability and collect structured follow-up information.
 
 At a high level:
 
 1. `Description_PROC` and `Reviews_PROC` are imported and treated as read-only.
-2. PARC creates its own user/session/review state in Supabase.
+2. PRISM stores its own user, session, review, enrichment, and follow-up state in Supabase.
 3. Server components fetch and shape data for the hotel list and hotel detail pages.
 4. Client components handle review drafting, voice input, enrichment display, and follow-up interactions.
 
@@ -17,10 +17,10 @@ At a high level:
 
 ### App shell
 
-- [layout.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/layout.tsx)
+- [app/layout.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/layout.tsx)
   - global navigation
   - session-aware nav rendering
-  - sticky header + footer
+  - sticky header and footer
 
 - [proxy.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/proxy.ts)
   - redirects unauthenticated users to `/login`
@@ -28,156 +28,169 @@ At a high level:
 
 ### Pages
 
-- [page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/page.tsx)
+- [app/page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/page.tsx)
   - loads hotels
   - computes review counts
   - groups cards into US and international sections
 
-- [page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/page.tsx)
-  - server-side hotel data aggregation
+- [app/hotels/[id]/page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/page.tsx)
+  - aggregates server-side hotel data
   - merges imported reviews with `Review_Submissions`
-  - loads persona tags for current session
-  - sorts reviews by quality, similarity, recency
+  - loads persona tags for the current session
+  - sorts reviews by relevance, quality, and recency
 
-- [HotelDetailClient.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/HotelDetailClient.tsx)
-  - hero header
-  - tabbed property UI
-  - review input + review feed composition
+- [app/hotels/[id]/HotelDetailClient.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/HotelDetailClient.tsx)
+  - renders the hotel hero and tabbed property UI
+  - composes review input and review feed
 
-- [page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/onboarding/page.tsx)
+- [app/onboarding/page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/onboarding/page.tsx)
   - loads saved persona data and passes it to the client tag editor
 
 ### Key client components
 
-- [PersonaTagger.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/onboarding/PersonaTagger.tsx)
+- [components/onboarding/PersonaTagger.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/onboarding/PersonaTagger.tsx)
   - 55 preset tags across 6 groups
   - custom tag support
   - direct client-side upsert to `User_Personas`
 
-- [ReviewInput.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewInput.tsx)
+- [components/auth/LoginForm.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/auth/LoginForm.tsx)
+  - username login form
+  - posts to `/api/session/login`
+  - uses full-page navigation into `/onboarding` so newly set session cookies are reliably available
+
+- [components/hotel/ReviewInput.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewInput.tsx)
   - quick tags
   - seeded Q&A carousel
   - voice dictation
   - star rating
   - AI polish
   - write to `Review_Submissions`
-  - follow-up request/answer lifecycle
+  - follow-up request / answer lifecycle
 
-- [ReviewFeed.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewFeed.tsx)
+- [components/hotel/ReviewFeed.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewFeed.tsx)
   - paginates in slices of 20
   - enriches only visible rows
-  - merges cache results into display-ready review objects
+  - reapplies ranking when enrichment data is available
 
-- [ReviewCard.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewCard.tsx)
+- [components/hotel/ReviewCard.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewCard.tsx)
   - similarity badge rendering
-  - AI title/tag hints
+  - AI title and tag hints
   - translation UI
   - sub-rating display
 
-- [FollowUpCard.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/FollowUpCard.tsx)
+- [components/hotel/FollowUpCard.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/FollowUpCard.tsx)
   - slider flow
   - agreement flow
-  - optional quick-tag flow path
-  - voice-driven answer nudging
+  - optional text and voice expansion
+  - modal interaction
 
 ## 3. Server-Side Libraries
 
 ### Session and database
 
-- [session.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/session.ts)
+- [lib/session.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/session.ts)
   - cookie constants
   - username normalization
   - session lookup
 
-- [supabase.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/supabase.ts)
+- [lib/supabase.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/supabase.ts)
   - lazy browser client
   - server client with service-role preference
 
-### Persona similarity
+### Persona similarity and ranking
 
-- [persona-match.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/persona-match.ts)
+- [lib/persona-match.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/persona-match.ts)
   - static semantic cluster map
   - inferred reviewer tag generation
   - optional embeddings fallback for custom tags
 
+- [lib/review-ranking.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-ranking.ts)
+  - shared persona-first sorting logic
+  - keeps matched reviews above unmatched reviews when quality is otherwise comparable
+
 ### Review enrichment
 
-- [review-enrichment.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment.ts)
+- [lib/review-enrichment.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment.ts)
   - deterministic review keys
   - review source-text hashing
   - AI tag normalization and alias resolution
 
-- [review-enrichment-constants.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment-constants.ts)
+- [lib/review-enrichment-constants.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment-constants.ts)
   - shared batch-size constants
 
-### Follow-up engine
+### Follow-up engine and hotel-claim suppression
 
-- [follow-up-engine.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/follow-up-engine.ts)
-  - memory decay layer
-  - blind-spot layer
-  - persona attribute boosts
-  - risk weighting
-  - deterministic question selection
+- [lib/follow-up-engine.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/follow-up-engine.ts)
+  - persona-first topic selection
+  - review-anchored negative follow-up logic
+  - hotel grounding and freshness scoring
+  - runtime LLM wording generation with deterministic fallback
+
+- [lib/hotel-claim-suppression.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/hotel-claim-suppression.ts)
+  - compares hotel-listed claims against recent guest-submitted signals
+  - hides tags when contradiction thresholds are met
+  - restores tags when fresh support returns
 
 ### Supporting utilities
 
-- [utils.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/utils.ts)
+- [lib/utils.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/utils.ts)
   - array parsing
   - HTML cleanup
   - amenity label mapping
 
-- [hotel-visuals.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/hotel-visuals.ts)
-  - hero/listing image mapping and external source URLs
+- [lib/hotel-visuals.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/hotel-visuals.ts)
+  - hero and listing image mapping
+  - external source URL helpers
 
 ## 4. API Routes
 
 ### Session
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/session/login/route.ts)
+- [app/api/session/login/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/session/login/route.ts)
   - validates username
-  - restores or creates `User_Personas` row
+  - restores or creates a `User_Personas` row
   - writes `parc_user_id` and `parc_username` cookies
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/session/logout/route.ts)
+- [app/api/session/logout/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/session/logout/route.ts)
   - clears session cookies
 
 ### Review authoring helpers
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/ai-polish/route.ts)
-  - `gpt-4o`
-  - separate prompt path for short inputs
-  - anti-hallucination constraints
+- [app/api/ai-polish/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/ai-polish/route.ts)
+  - uses `gpt-4o`
+  - has a separate prompt path for short inputs
+  - includes anti-hallucination constraints
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/translate/route.ts)
-  - `gpt-4o`
-  - target-language translation
-  - returns JSON with detected language and translated text
+- [app/api/reviews/translate/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/translate/route.ts)
+  - uses `gpt-4o`
+  - translates into the requested target language
+  - returns detected language and translated text
 
 ### Review enrichment
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/enrich/route.ts)
+- [app/api/reviews/enrich/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/enrich/route.ts)
   - batch-caps incoming reviews
-  - checks `Review_Enrichments` cache by `review_key`
-  - regenerates only when source text hash changed or no valid cache exists
-  - persists generated title/tag results back into cache
-  - uses recursive split/retry when a batch fails
+  - checks `Review_Enrichments` by `review_key`
+  - regenerates only when the source text hash changed or no valid cache exists
+  - persists generated title and tag results back into the cache
+  - uses recursive split-and-retry when a batch fails
 
 ### Follow-up pipeline
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/route.ts)
-  - validates payload
+- [app/api/reviews/follow-up/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/route.ts)
+  - validates the payload
   - calls `runFollowUpEngine`
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/answers/route.ts)
+- [app/api/reviews/follow-up/answers/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/answers/route.ts)
   - validates answer payloads
   - normalizes slider and agreement values
   - persists rows into `FollowUp_Answers`
 
 ### Legacy route
 
-- [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/personas/route.ts)
-  - currently not used by the active onboarding flow
-  - does not match the active session cookie contract
+- [app/api/personas/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/personas/route.ts)
+  - not used by the active onboarding flow
+  - does not match the active session-cookie contract
 
 ## 5. Data Model Notes
 
@@ -186,7 +199,7 @@ At a high level:
 - `Description_PROC`
 - `Reviews_PROC`
 
-The application assumes these tables already exist and uses them as read-only external data.
+The application assumes these tables already exist and treats them as external, read-only inputs.
 
 ### App-managed tables
 
@@ -197,89 +210,85 @@ The application assumes these tables already exist and uses them as read-only ex
 
 Primary schema reference:
 
-- [app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
+- [supabase/migrations/app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
 
-Backfill / migration helpers:
+Backfill and migration helpers:
 
-- [20260414_add_username_to_user_personas.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/20260414_add_username_to_user_personas.sql)
-- [20260415_add_review_enrichments.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/20260415_add_review_enrichments.sql)
+- [supabase/migrations/20260414_add_username_to_user_personas.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/20260414_add_username_to_user_personas.sql)
+- [supabase/migrations/20260415_add_review_enrichments.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/20260415_add_review_enrichments.sql)
 
 ## 6. Model Usage
 
 | Use case | Model | File |
 | --- | --- | --- |
-| Review polish | `gpt-4o` | [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/ai-polish/route.ts) |
-| Review translation | `gpt-4o` | [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/translate/route.ts) |
-| Review title/tag enrichment | `gpt-5-nano` | [review-enrichment.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment.ts) |
-| Custom persona matching fallback | `text-embedding-3-small` | [persona-match.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/persona-match.ts) |
+| Review polish | `gpt-4o` | [app/api/ai-polish/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/ai-polish/route.ts) |
+| Review translation | `gpt-4o` | [app/api/reviews/translate/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/translate/route.ts) |
+| Review title/tag enrichment | `gpt-5-nano` | [lib/review-enrichment.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/review-enrichment.ts) |
+| Follow-up wording | `gpt-4o-mini` | [lib/follow-up-engine.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/follow-up-engine.ts) |
+| Custom persona matching fallback | `text-embedding-3-small` | [lib/persona-match.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/lib/persona-match.ts) |
 
 Important distinction:
 
-- The follow-up engine now uses deterministic topic selection plus a runtime OpenAI call to generate the final question wording.
-- The `llm_prompt` field returned by the follow-up route remains a deterministic generation summary for debugging/transparency rather than the literal model prompt payload.
+- Follow-up topic selection is deterministic and grounded.
+- Final follow-up wording is generated at runtime, with deterministic fallback when needed.
+- Review enrichment is a display layer, not a source-of-truth content layer.
 
 ## 7. Background / Maintenance Scripts
 
-- [backfill-review-enrichments.cjs](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/scripts/backfill-review-enrichments.cjs)
+- [scripts/backfill-review-enrichments.cjs](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/scripts/backfill-review-enrichments.cjs)
   - backfills `Reviews_PROC` into `Review_Enrichments`
   - batches requests
   - normalizes AI tag output
   - persists enrichment cache rows
 
-## 8. Code Review Findings
+## 8. Known Constraints and Risks
 
-### Finding 1: Legacy persona route is stale and broken
+### 1. Legacy persona route remains in the repo
 
-- File: [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/personas/route.ts)
-- Severity: Medium
-- Details:
-  - reads `parc_anon_uid`, while the active session system uses `parc_user_id`
-  - does not match the current onboarding write path, which writes directly from the client
-  - could mislead future contributors because it looks live but is effectively dead code
+- File: [app/api/personas/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/personas/route.ts)
+- Impact:
+  - can mislead future contributors because it looks live but is effectively dead code
+  - does not match the current username-cookie contract
 
-### Finding 2: QuickTag persistence is not schema-aligned
+### 2. `QuickTag` support is not fully schema-aligned
 
 - Files:
-  - [route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/answers/route.ts)
-  - [app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
-- Severity: Medium
-- Details:
+  - [app/api/reviews/follow-up/answers/route.ts](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/api/reviews/follow-up/answers/route.ts)
+  - [supabase/migrations/app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
+- Impact:
   - the route validator accepts `QuickTag`
-  - the UI includes a `QuickTag` rendering path
-  - the database check constraint for `FollowUp_Answers.ui_type` currently allows only `Slider` and `Agreement`
-  - this is safe today because the live engine emits only `Slider` and `Agreement`, but it blocks future QuickTag activation unless schema and docs are updated together
+  - the UI contains a `QuickTag` rendering path
+  - the database check constraint currently allows only `Slider` and `Agreement`
+  - this is safe today because the live engine emits only `Slider` and `Agreement`, but it blocks future `QuickTag` activation unless schema and docs are updated together
 
-### Finding 3: Schema references lag behind the live `Review_Submissions` write path
+### 3. Checked-in schema references should be validated against the live database
 
 - Files:
-  - [app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
-  - [PersonaTagger.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/onboarding/PersonaTagger.tsx)
-  - [ReviewInput.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewInput.tsx)
-  - [page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/page.tsx)
-- Severity: High
-- Details:
-  - the active app writes and reads `Review_Submissions.username` and `Review_Submissions.rating`
-  - the checked-in schema reference for `Review_Submissions` does not currently declare those columns
-  - this creates setup risk for fresh environments and makes the schema docs less trustworthy than the runtime code
+  - [supabase/migrations/app_tables.sql](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/supabase/migrations/app_tables.sql)
+  - [components/hotel/ReviewInput.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/components/hotel/ReviewInput.tsx)
+  - [app/hotels/[id]/page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/hotels/[id]/page.tsx)
+- Impact:
+  - the runtime app expects certain columns such as `username` and `rating`
+  - fresh environments should verify schema parity before production rollout
 
-### Finding 4: Homepage review counts use an N+1 query pattern
+### 4. Homepage review counts still use an N+1 query pattern
 
-- File: [page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/page.tsx)
-- Severity: Low to Medium
-- Details:
-  - the homepage fetches all hotels first
-  - then issues one `head: true` count query per hotel against `Reviews_PROC`
-  - this is acceptable at demo scale but will likely become one of the first bottlenecks as inventory grows
+- File: [app/page.tsx](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/app/page.tsx)
+- Impact:
+  - acceptable for demo scale
+  - likely to become an early bottleneck as inventory grows
 
-## 9. Documentation Strategy
-
-Current repo documentation is now split by purpose:
+## 9. Documentation Map
 
 - [README.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/README.md)
-  - setup, architecture snapshot, route overview
+  - setup instructions
+  - architecture snapshot
+  - route overview
 
-- [PRD.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/PRD.md)
-  - product requirements and implementation status
+- [docs/PRD.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/PRD.md)
+  - product requirements
+  - implementation status
 
-- [TECHNICAL_OVERVIEW.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/TECHNICAL_OVERVIEW.md)
-  - implementation details and code-review findings
+- [docs/TECHNICAL_OVERVIEW.md](/Users/rickypan/Documents/Projects/PARC_Project/PARC-Project/docs/TECHNICAL_OVERVIEW.md)
+  - implementation details
+  - constraints and contributor guidance

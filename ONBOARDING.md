@@ -1,4 +1,4 @@
-# Welcome to PARC Project
+# Welcome to PRISM Project
 
 ## How We Use Claude
 
@@ -18,7 +18,7 @@ Top MCP Servers:
 ## Your Setup Checklist
 
 ### Codebases
-- [ ] parc-project — github.com/ruiqipan/parc-project
+- [ ] prism / parc-project — github.com/ruiqipan/parc-project
 
 ### MCP Servers to Activate
   (none — no MCP servers in use yet)
