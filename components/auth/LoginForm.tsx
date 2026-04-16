@@ -1,10 +1,8 @@
 'use client';
 
 import { FormEvent, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function LoginForm() {
-  const router = useRouter();
   const [username, setUsername] = useState('');
   const [error, setError] = useState('');
   const [isPending, startTransition] = useTransition();
@@ -27,8 +25,7 @@ export default function LoginForm() {
           throw new Error(data?.error ?? 'Unable to log in.');
         }
 
-        router.push(data.redirectTo ?? '/onboarding');
-        router.refresh();
+        window.location.assign(data.redirectTo ?? '/onboarding');
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : 'Unable to log in.');
       }
