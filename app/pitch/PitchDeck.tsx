@@ -319,7 +319,132 @@ export default function PitchDeck() {
         </div>
       </section>
 
-      {/* Slide 1: From Reviews to Reliable Reality — cinematic narrative */}
+      {/* Slide 1: Motivation — The Real Problem (Expedia-style) */}
+      <section className="min-h-screen w-full flex flex-col items-center justify-center scroll-mt-0 relative overflow-hidden bg-white">
+        {/* Expedia-style top accent bar */}
+        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#FFC72C] via-[#FFDD6B] to-[#FFC72C]" />
+
+        {/* Subtle warm grid */}
+        <div className="absolute inset-0 opacity-[0.035]" style={{
+          backgroundImage: 'linear-gradient(#FFC72C 1px, transparent 1px), linear-gradient(90deg, #FFC72C 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }} />
+
+        {/* Warm top-right glow */}
+        <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#FFC72C]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-[#003580]/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 max-w-6xl w-full px-8 md:px-20 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 bg-[#FFC72C]/15 border border-[#FFC72C]/40 rounded-full px-4 py-1.5 mb-8"
+          >
+            <span className="w-2 h-2 rounded-full bg-[#FFC72C] inline-block" />
+            <span className="text-[#8B6A00] font-semibold uppercase tracking-widest text-[11px]">Why This Matters</span>
+          </motion.div>
+
+          <motion.h2
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.1 }}
+            className="text-4xl md:text-6xl font-bold text-slate-900 mb-5 tracking-tight leading-tight"
+          >
+            Generic reviews fail<br />
+            <span className="text-[#003580]">real travelers</span>
+          </motion.h2>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="text-lg text-slate-500 mb-14 max-w-2xl mx-auto leading-relaxed"
+          >
+            The gap between what&apos;s written and what&apos;s real — for the traveler who actually needs to know — is costing trust.
+          </motion.p>
+
+          {/* Three stat cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left mb-12">
+            {/* Stat 1 */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="bg-white border border-slate-200 rounded-3xl p-7 flex flex-col shadow-sm"
+            >
+              <div className="text-5xl font-black text-red-500 mb-1 leading-none">54%</div>
+              <div className="text-slate-400 text-[10px] font-mono uppercase tracking-widest mb-4">+ 81%</div>
+              <p className="text-slate-700 text-sm leading-relaxed flex-1">
+                of travelers with disabilities were assigned rooms inconsistent with their booking —
+                and <span className="text-slate-900 font-semibold">81%</span> encountered bathrooms that were not accessible as described.
+              </p>
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <span className="text-slate-400 text-[10px] font-mono leading-snug">MMGY Global · Portrait of Travelers with Disabilities · 2022</span>
+              </div>
+            </motion.div>
+
+            {/* Stat 2 */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.45 }}
+              className="bg-[#003580] rounded-3xl p-7 flex flex-col shadow-sm"
+            >
+              <div className="text-5xl font-black text-[#FFC72C] mb-1 leading-none">83%</div>
+              <div className="text-white/40 text-[10px] font-mono uppercase tracking-widest mb-4">+ 46% critical</div>
+              <p className="text-white/85 text-sm leading-relaxed flex-1">
+                of travelers say reviews from <span className="text-white font-semibold">people like them</span> are important to booking decisions —
+                nearly half call it a <span className="text-white font-semibold">critical factor</span>.
+              </p>
+              <div className="mt-5 pt-4 border-t border-white/15">
+                <span className="text-white/40 text-[10px] font-mono leading-snug">Expedia Group · Empowering Inclusivity in Travel · 2024</span>
+              </div>
+            </motion.div>
+
+            {/* Stat 3 */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.6 }}
+              className="bg-white border border-slate-200 rounded-3xl p-7 flex flex-col shadow-sm"
+            >
+              <div className="text-5xl font-black text-amber-500 mb-1 leading-none">69%</div>
+              <div className="text-slate-400 text-[10px] font-mono uppercase tracking-widest mb-4">neurodivergent travelers</div>
+              <p className="text-slate-700 text-sm leading-relaxed flex-1">
+                need more detailed accommodation information before booking —
+                yet <span className="text-slate-900 font-semibold">49%</span> still report negative experiences due to unmet expectations.
+              </p>
+              <div className="mt-5 pt-4 border-t border-slate-100">
+                <span className="text-slate-400 text-[10px] font-mono leading-snug">Booking.com · Neurodivergent Travelers Research · 2025</span>
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Bottom insight */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.75 }}
+            className="inline-flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3"
+          >
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <span className="text-slate-600 text-sm">
+              Current review systems don&apos;t know <em>who</em> is reading — or <em>what</em> information has gone stale.
+            </span>
+          </motion.div>
+        </div>
+
+        <motion.div
+          animate={{ y: [0, 10, 0] }}
+          transition={{ duration: 2, repeat: Infinity, delay: 1.5 }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 text-slate-300 z-20"
+        >
+          <ChevronDown className="w-8 h-8" />
+        </motion.div>
+      </section>
+
+      {/* Slide 2: From Reviews to Reliable Reality — cinematic narrative */}
       <section className="min-h-screen w-full flex flex-col items-center justify-center scroll-mt-0 relative overflow-hidden bg-black">
         {/* Background: aerial city nightscape */}
         <div
@@ -443,7 +568,7 @@ export default function PitchDeck() {
         </motion.div>
       </section>
 
-      {/* Slide 2: Algorithm Core Overview */}
+      {/* Slide 3: Algorithm Core Overview */}
       <Section className="bg-white">
         <div className="text-center mb-12">
           <motion.div className="px-4 py-1 mb-5 inline-block rounded-full bg-blue-50 text-blue-700 text-xs font-semibold tracking-widest uppercase">
