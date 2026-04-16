@@ -1,6 +1,6 @@
 # PRISM
 
-PRISM is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon. It helps travelers find the reviews that matter most to them, lowers the friction of writing useful reviews, and refreshes stale hotel knowledge through targeted follow-up questions.
+PRISM is a persona-aware hotel review experience built for the Expedia Group Wharton Hack-AI-thon and submitted through the WAIAI Hack-AI-thon 2026 GitHub Classroom repository. It helps travelers find the reviews that matter most to them, lowers the friction of writing useful reviews, and refreshes stale hotel knowledge through targeted follow-up questions.
 
 ## Live App
 
@@ -188,9 +188,14 @@ supabase/
 
 ## Documentation
 
+<<<<<<< HEAD
 - Product requirements: [docs/PRD.md](docs/PRD.md)
 - Technical overview: [docs/TECHNICAL_OVERVIEW.md](docs/TECHNICAL_OVERVIEW.md)
 - Team onboarding notes: [ONBOARDING.md](ONBOARDING.md)
+=======
+- Product requirements: `docs/PRD.md`
+- Technical overview: `docs/TECHNICAL_OVERVIEW.md`
+>>>>>>> classroom/main
 
 ## Notes
 
